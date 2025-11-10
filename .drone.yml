@@ -33,11 +33,7 @@ steps:
   - name: docker-build-push
     image: docker:27.1.1-cli
     privileged: true
-    environment:
-      DOCKER_USERNAME:
-        from_secret: DOCKER_USERNAME
-      DOCKER_PASSWORD:
-        from_secret: DOCKER_PASSWORD
+    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD ]
     commands:
       - apk add --no-cache bash coreutils
       - source /drone/src/.build_env || true
@@ -58,16 +54,13 @@ steps:
   # ─────────────────────────────── Update Helm Values ────────────────────────
   - name: bump-stack-values
     image: alpine/git:2.40.1
+    secrets: [ STACK_GIT_USER, STACK_GIT_TOKEN ]
     environment:
       STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
       STACK_BRANCH: main
       STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
       VALUES_SERVICE_NAME: appointment
       SERVICE_NAME: lt-be-apnt-service
-      STACK_GIT_USER:
-        from_secret: STACK_GIT_USER
-      STACK_GIT_TOKEN:
-        from_secret: STACK_GIT_TOKEN
     commands:
       - apk add --no-cache bash coreutils
       - source /drone/src/.build_env || true

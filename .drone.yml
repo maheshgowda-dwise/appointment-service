@@ -3,6 +3,7 @@ type: docker
 name: appointment-service-ci
 
 steps:
+  # Step 1: Prepare IMAGE_TAG
   - name: prepare
     image: alpine:3.18
     environment:
@@ -10,15 +11,16 @@ steps:
     commands:
       - apk add --no-cache git bash coreutils
       - |
-        bash -c "
-        COMMIT_HASH=\$(git rev-parse --short HEAD)
-        TIMESTAMP=\$(date -u +%Y%m%d%H%M)
-        IMAGE_TAG=\"${TAG_PREFIX}-\${TIMESTAMP}-\${COMMIT_HASH}\"
-        echo \"IMAGE_TAG=\${IMAGE_TAG}\" > .build_env
-        echo \"Generated: \${IMAGE_TAG}\"
-        "
+        bash -c '
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        TIMESTAMP=$(date -u +%Y%m%d%H%M)
+        IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
+        echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env
+        echo "Generated: ${IMAGE_TAG}"
+        '
       - cat .build_env
 
+  # Step 2: Maven Build
   - name: maven-build
     image: maven:3.9-eclipse-temurin-17
     commands:
@@ -29,6 +31,7 @@ steps:
     depends_on:
       - prepare
 
+  # Step 3: Docker Build & Push (No latest)
   - name: docker-build-push
     image: docker:20.10.17-cli
     privileged: true

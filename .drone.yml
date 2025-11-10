@@ -9,12 +9,14 @@ steps:
     environment:
       TAG_PREFIX: v2qa
     commands:
-      - apk add --no-cache git bash
-      - COMMIT_HASH="$(git rev-parse --short HEAD)"
-      - TIMESTAMP="$(date -u +%Y%m%d%H%M)"
-      - IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
-      - echo "IMAGE_TAG=${IMAGE_TAG}"
-      - echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env
+      - apk add --no-cache git bash coreutils
+      # ✅ Use bash to correctly capture variables and write IMAGE_TAG
+      - bash -c 'COMMIT_HASH=$(git rev-parse --short HEAD); \
+                 TIMESTAMP=$(date -u +%Y%m%d%H%M); \
+                 IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"; \
+                 echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env; \
+                 echo "Generated: ${IMAGE_TAG}"'
+      - cat .build_env
 
   # Step 1: Maven build (skip tests)
   - name: maven-build
@@ -38,6 +40,7 @@ steps:
         from_secret: DOCKER_PASSWORD
     commands:
       - apk add --no-cache bash
+      # ✅ load IMAGE_TAG into environment
       - set -a
       - source .build_env
       - set +a

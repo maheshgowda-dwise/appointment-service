@@ -17,10 +17,9 @@ steps:
     - echo "IMAGE_TAG=${IMAGE_TAG}" >> /drone/src/.build_env
   when:
     event:
-      include:
-        - push
-        - tag
-        - deployment
+      - push
+      - tag
+      - deployment
 
 # ─────────────────────────────── Check If Up-To-Date ────────────────────
 - name: check-up-to-date
@@ -73,8 +72,10 @@ steps:
   image: docker:27.1.1-cli
   privileged: true
   environment:
-    DOCKER_USERNAME: ${DOCKER_USERNAME}
-    DOCKER_PASSWORD: ${DOCKER_PASSWORD}
+    DOCKER_USERNAME:
+      from_secret: DOCKER_USERNAME
+    DOCKER_PASSWORD:
+      from_secret: DOCKER_PASSWORD
   commands:
     - apk add --no-cache bash coreutils
     - source /drone/src/.build_env || true
@@ -91,11 +92,6 @@ steps:
   volumes:
     - name: docker_sock
       path: /var/run/docker.sock
-  secrets:
-    - source: DOCKER_USERNAME
-      target: DOCKER_USERNAME
-    - source: DOCKER_PASSWORD
-      target: DOCKER_PASSWORD
 
 # ─────────────────────────────── Bump Helm Values ────────────────────────
 - name: bump-stack-values
@@ -106,6 +102,10 @@ steps:
     STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
     VALUES_SERVICE_NAME: appointment
     SERVICE_NAME: lt-be-apnt-service
+    STACK_GIT_USER:
+      from_secret: STACK_GIT_USER
+    STACK_GIT_TOKEN:
+      from_secret: STACK_GIT_TOKEN
   commands:
     - apk add --no-cache bash coreutils
     - source /drone/src/.build_env || true
@@ -126,11 +126,6 @@ steps:
     - git push ${AUTH_URL} ${STACK_BRANCH}
   depends_on:
     - docker-build-push
-  secrets:
-    - source: STACK_GIT_USER
-      target: STACK_GIT_USER
-    - source: STACK_GIT_TOKEN
-      target: STACK_GIT_TOKEN
 
 # ─────────────────────────────── Volumes ────────────────────────────────
 volumes:

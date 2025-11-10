@@ -77,8 +77,8 @@ steps:
       - git checkout "$STACK_BRANCH"
       - echo "Updating image in $STACK_FILE for $VALUES_SERVICE_NAME"
       - sed -i "s|maheshgowdamg25/lt-be-apnt-service:.*|maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}|g" "$STACK_FILE"
-      - git config --global user.email "ci@lifetrenz.local"
-      - git config --global user.name "Lifetrenz CI"
+      - git config --global user.email "mahesh.g@lifetrenz.com"
+      - git config --global user.name "maheshgowda-dwise"
       - git add "$STACK_FILE"
       - 'git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"'
       - AUTH_URL=$(echo "$STACK_REPO" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")

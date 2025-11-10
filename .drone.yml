@@ -36,9 +36,6 @@ steps:
   environment:
     DOCKER_USERNAME: ${DOCKER_USERNAME}
     DOCKER_PASSWORD: ${DOCKER_PASSWORD}
-  volumes:
-    - name: docker_sock
-      path: /var/run/docker.sock
   commands:
     - apk add --no-cache bash coreutils
     - source /drone/src/.build_env || true
@@ -50,6 +47,9 @@ steps:
     - echo "🚀 Pushing Docker images..."
     - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}
     - docker push maheshgowdamg25/lt-be-apnt-service:latest
+  volumes:
+    - name: docker_sock
+      path: /var/run/docker.sock
   depends_on:
     - maven-build
 
@@ -71,16 +71,14 @@ steps:
     - cd /tmp/stack
     - git fetch origin "$STACK_BRANCH" --prune
     - git checkout "$STACK_BRANCH"
-    - echo "Updating image in ${STACK_FILE} for ${VALUES_SERVICE_NAME}"
-    - sed -E "/^[[:space:]]*-[[:space:]]*name:[[:space:]]*${VALUES_SERVICE_NAME}[[:space:]]*$/,/^[[:space:]]*-[[:space:]]*name:[[:space:]]*/ {
-        /^[[:space:]]*image:[[:space:]]*/ s|^([[:space:]]*image:[[:space:]]*).*$|\1maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}|
-      }" "${STACK_FILE}" > "${STACK_FILE}.tmp" && mv "${STACK_FILE}.tmp" "${STACK_FILE}"
-    - git config user.email "ci@lifetrenz.local"
-    - git config user.name "Lifetrenz CI"
-    - git add "${STACK_FILE}"
+    - echo "Updating image in $STACK_FILE for $VALUES_SERVICE_NAME"
+    - sed -i "s|maheshgowdamg25/lt-be-apnt-service:.*|maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}|g" "$STACK_FILE"
+    - git config --global user.email "ci@lifetrenz.local"
+    - git config --global user.name "Lifetrenz CI"
+    - git add "$STACK_FILE"
     - git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"
-    - AUTH_URL=$(echo "${STACK_REPO}" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")
-    - git push "${AUTH_URL}" "${STACK_BRANCH}"
+    - AUTH_URL=$(echo "$STACK_REPO" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")
+    - git push "$AUTH_URL" "$STACK_BRANCH"
   depends_on:
     - docker-build-push
 

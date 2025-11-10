@@ -3,10 +3,10 @@ type: docker
 name: appointment-service-ci
 
 steps:
-  - name: maven-clean
+  - name: maven-build
     image: maven:3.9-eclipse-temurin-17
     commands:
-      - mvn -B clean
+      - mvn -B clean package -DskipTests
     volumes:
       - name: m2_cache
         path: /root/.m2

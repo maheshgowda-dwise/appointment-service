@@ -3,22 +3,19 @@ type: docker
 name: appointment-service-ci
 
 steps:
-  # Step 1: Prepare IMAGE_TAG
+  # Step 1: Prepare IMAGE_TAG = v2qa-YYYYMMDDHHMM-gitsha
   - name: prepare
     image: alpine:3.18
     environment:
       TAG_PREFIX: v2qa
     commands:
       - apk add --no-cache git bash coreutils
-      - export TAG_PREFIX="${TAG_PREFIX}"
       - |
-        bash -c '
         COMMIT_HASH=$(git rev-parse --short HEAD)
         TIMESTAMP=$(date -u +%Y%m%d%H%M)
         IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
         echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env
-        echo "Generated: ${IMAGE_TAG}"
-        '
+        echo "Generated IMAGE_TAG=${IMAGE_TAG}"
       - cat .build_env
 
   # Step 2: Maven Build
@@ -32,7 +29,7 @@ steps:
     depends_on:
       - prepare
 
-  # Step 3: Docker Build & Push (No latest)
+  # Step 3: Docker Build & Push (use IMAGE_TAG)
   - name: docker-build-push
     image: docker:20.10.17-cli
     privileged: true
@@ -47,6 +44,7 @@ steps:
       - source .build_env
       - set +a
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - echo "Using tag: ${IMAGE_TAG}"
       - docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
       - docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
     volumes:

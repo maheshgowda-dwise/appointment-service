@@ -36,6 +36,9 @@ steps:
   environment:
     DOCKER_USERNAME: ${DOCKER_USERNAME}
     DOCKER_PASSWORD: ${DOCKER_PASSWORD}
+  volumes:
+    - name: docker_sock
+      path: /var/run/docker.sock
   commands:
     - apk add --no-cache bash coreutils
     - source /drone/src/.build_env || true
@@ -47,9 +50,6 @@ steps:
     - echo "🚀 Pushing Docker images..."
     - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}
     - docker push maheshgowdamg25/lt-be-apnt-service:latest
-  volumes:
-    - name: docker_sock
-      path: /var/run/docker.sock
   depends_on:
     - maven-build
 

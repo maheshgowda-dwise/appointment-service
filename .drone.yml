@@ -33,14 +33,16 @@ steps:
   - name: docker-build-push
     image: docker:27.1.1-cli
     privileged: true
-    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD ]
+    environment:
+      DOCKER_USERNAME: ${DOCKER_USERNAME}
+      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
     commands:
       - apk add --no-cache bash coreutils
       - source /drone/src/.build_env || true
       - echo "🔐 Logging into Docker Hub..."
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       - echo "🐳 Building Docker image..."
-      - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}  .
+      - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} .
       - docker tag maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} maheshgowdamg25/lt-be-apnt-service:latest
       - echo "🚀 Pushing Docker images..."
       - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}
@@ -54,13 +56,14 @@ steps:
   # ─────────────────────────────── Update Helm Values ────────────────────────
   - name: bump-stack-values
     image: alpine/git:2.40.1
-    secrets: [ STACK_GIT_USER, STACK_GIT_TOKEN ]
     environment:
       STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
       STACK_BRANCH: main
       STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
       VALUES_SERVICE_NAME: appointment
       SERVICE_NAME: lt-be-apnt-service
+      STACK_GIT_USER: ${STACK_GIT_USER}
+      STACK_GIT_TOKEN: ${STACK_GIT_TOKEN}
     commands:
       - apk add --no-cache bash coreutils
       - source /drone/src/.build_env || true
@@ -86,3 +89,4 @@ volumes:
   - name: docker_sock
     host:
       path: /var/run/docker.sock
+

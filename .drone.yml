@@ -2,14 +2,6 @@ kind: pipeline
 type: docker
 name: appointment-service-ci
 
-# Global volumes for caching and Docker access
-volumes:
-  - name: m2_cache
-    temp: {}
-  - name: docker_sock
-    host:
-      path: /var/run/docker.sock
-
 steps:
   # ─────────────────────────────── 1. Prepare ───────────────────────────────────
   # Generates a unique image tag and shares it with subsequent steps.
@@ -23,10 +15,10 @@ steps:
       - TIMESTAMP=$(date -u +%Y%m%d%H%M)
       - IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
       # Persist the IMAGE_TAG variable for other steps
-      - echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env
+      - echo "export IMAGE_TAG=${IMAGE_TAG}" > .build_env
 
   # ─────────────────────────── 2. Maven Build ─────────────────────────────────
-  # Compiles the Java application and creates a JAR file.
+  # Compiles the Java application using a cached Maven repository.
   - name: maven-build
     image: maven:3.9-eclipse-temurin-17
     commands:
@@ -68,7 +60,7 @@ steps:
     environment:
       STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
       STACK_BRANCH: main
-      # IMPORTANT: Adjust this path to your values.yaml file in the Argocd repo
+      # IMPORTANT: Adjust this path if your values.yaml is in a different location
       STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
       VALUES_SERVICE_NAME: appointment
       SERVICE_NAME: lt-be-apnt-service
@@ -81,11 +73,13 @@ steps:
       - git fetch origin "$STACK_BRANCH" --prune
       - git checkout "$STACK_BRANCH"
       - echo "Updating image tag in $STACK_FILE"
-      # This updated sed command correctly targets the 'image:' line based on your values.yaml structure
+      # This command is tailored to your values.yaml structure:
+      # service:
+      #   image: user/repo:tag
       - sed -i -E "s|^( *image: maheshgowdamg25/lt-be-apnt-service:).*|\1${IMAGE_TAG}|" "$STACK_FILE"
       - echo "Configuring git..."
-      - git config --global user.email "mahesh.g@lifetrenz.com"
-      - git config --global user.name "maheshgowda-dwise"
+      - git config --global user.email "ci@drone.local"
+      - git config --global user.name "Drone CI"
       - git add "$STACK_FILE"
       - 'git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit."'
       - echo "Pushing changes to GitOps repo..."
@@ -93,3 +87,13 @@ steps:
       - git push "$AUTH_URL" "$STACK_BRANCH"
     depends_on:
       - docker-build-push
+
+# --- Top-Level Volume Definitions ---
+# This block defines shared volumes for the pipeline.
+# It must be at the root level (no indentation).
+volumes:
+  - name: m2_cache
+    temp: {}
+  - name: docker_sock
+    host:
+      path: /var/run/docker.sock

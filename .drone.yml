@@ -3,23 +3,20 @@ type: docker
 name: appointment-service-ci
 
 steps:
-  # Step 2: Prepare (create IMAGE_TAG and persist for later steps)
+  # 1) Generate IMAGE_TAG
   - name: prepare
     image: alpine:3.18
     environment:
       TAG_PREFIX: v2qa
     commands:
       - apk add --no-cache git bash
-      # short commit from current checkout
       - COMMIT_HASH="$(git rev-parse --short HEAD)"
-      # timestamp similar to your bash script
       - TIMESTAMP="$(date -u +%Y%m%d%H%M)"
       - IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
       - echo "IMAGE_TAG=${IMAGE_TAG}"
-      # persist for following steps
       - echo "export IMAGE_TAG=${IMAGE_TAG}" > .build_env
 
-  # Step 1 (existing): Maven build (skip tests for speed)
+  # 2) Maven Build
   - name: maven-build
     image: maven:3.9-eclipse-temurin-17
     commands:
@@ -30,6 +27,63 @@ steps:
     depends_on:
       - prepare
 
+  # 3) Docker Build + Push
+  - name: docker-build-push
+    image: docker:20.10.17-cli
+    privileged: true
+    environment:
+      DOCKER_USERNAME:
+        from_secret: DOCKER_USERNAME
+      DOCKER_PASSWORD:
+        from_secret: DOCKER_PASSWORD
+    commands:
+      - apk add --no-cache bash
+      - source .build_env
+      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+      - docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
+      - docker tag "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" "maheshgowdamg25/lt-be-apnt-service:latest"
+      - docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
+      - docker push "maheshgowdamg25/lt-be-apnt-service:latest"
+    volumes:
+      - name: docker_sock
+        path: /var/run/docker.sock
+    depends_on:
+      - maven-build
+
+  # 4) Update ArgoCD Helm Values Repo
+  - name: update-helm-values
+    image: alpine/git:2.40.1
+    environment:
+      STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
+      STACK_BRANCH: main
+      STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
+      SERVICE_NAME: lt-be-apnt-service
+      VALUES_SERVICE_NAME: appointment
+      STACK_GIT_USER:
+        from_secret: STACK_GIT_USER
+      STACK_GIT_TOKEN:
+        from_secret: STACK_GIT_TOKEN
+    commands:
+      - apk add --no-cache bash sed
+      - source .build_env
+      - echo "Cloning ArgoCD repo..."
+      - AUTH_URL=$(echo "$STACK_REPO" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")
+      - git clone "$AUTH_URL" /tmp/stack
+      - cd /tmp/stack
+      - git checkout "$STACK_BRANCH"
+      - echo "Updating image tag to ${IMAGE_TAG}"
+      - sed -i -E "s|(image:.*${SERVICE_NAME}:).*|\1${IMAGE_TAG}|" "$STACK_FILE"
+      - git config user.email "ci@drone.local"
+      - git config user.name "Drone CI"
+      - git add "$STACK_FILE"
+      - git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"
+      - git push "$AUTH_URL" "$STACK_BRANCH"
+    depends_on:
+      - docker-build-push
+
 volumes:
   - name: m2_cache
     temp: {}
+  - name: docker_sock
+    host:
+      path: /var/run/docker.sock

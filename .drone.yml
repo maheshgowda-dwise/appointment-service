@@ -3,7 +3,7 @@ type: docker
 name: appointment-service-ci
 
 steps:
-  # 1) Generate IMAGE_TAG
+  # Step 2: Prepare (create IMAGE_TAG and persist for later steps)
   - name: prepare
     image: alpine:3.18
     environment:
@@ -16,7 +16,7 @@ steps:
       - echo "IMAGE_TAG=${IMAGE_TAG}"
       - echo "export IMAGE_TAG=${IMAGE_TAG}" > .build_env
 
-  # 2) Maven Build
+  # Step 1: Maven build (skip tests)
   - name: maven-build
     image: maven:3.9-eclipse-temurin-17
     commands:
@@ -27,7 +27,7 @@ steps:
     depends_on:
       - prepare
 
-  # 3) Docker Build + Push
+  # ✅ Step 3: Docker Build + Push (Docker Hub)
   - name: docker-build-push
     image: docker:20.10.17-cli
     privileged: true
@@ -49,37 +49,6 @@ steps:
         path: /var/run/docker.sock
     depends_on:
       - maven-build
-
-  # 4) Update ArgoCD Helm Values Repo
-  - name: update-helm-values
-    image: alpine/git:2.40.1
-    environment:
-      STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
-      STACK_BRANCH: main
-      STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
-      SERVICE_NAME: lt-be-apnt-service
-      VALUES_SERVICE_NAME: appointment
-      STACK_GIT_USER:
-        from_secret: STACK_GIT_USER
-      STACK_GIT_TOKEN:
-        from_secret: STACK_GIT_TOKEN
-    commands:
-      - apk add --no-cache bash sed
-      - source .build_env
-      - echo "Cloning ArgoCD repo..."
-      - AUTH_URL=$(echo "$STACK_REPO" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")
-      - git clone "$AUTH_URL" /tmp/stack
-      - cd /tmp/stack
-      - git checkout "$STACK_BRANCH"
-      - echo "Updating image tag to ${IMAGE_TAG}"
-      - sed -i -E "s|(image:.*${SERVICE_NAME}:).*|\1${IMAGE_TAG}|" "$STACK_FILE"
-      - git config user.email "ci@drone.local"
-      - git config user.name "Drone CI"
-      - git add "$STACK_FILE"
-      - git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"
-      - git push "$AUTH_URL" "$STACK_BRANCH"
-    depends_on:
-      - docker-build-push
 
 volumes:
   - name: m2_cache

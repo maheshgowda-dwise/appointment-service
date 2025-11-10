@@ -6,14 +6,13 @@ steps:
   # Step 1: Prepare IMAGE_TAG = v2qa-YYYYMMDDHHMM-gitsha
   - name: prepare
     image: alpine:3.18
-    environment:
-      TAG_PREFIX: v2qa
+    
     commands:
       - apk add --no-cache git bash coreutils
       - |
         COMMIT_HASH=$(git rev-parse --short HEAD)
         TIMESTAMP=$(date -u +%Y%m%d%H%M)
-        IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
+        IMAGE_TAG="v2qa-${TIMESTAMP}-${COMMIT_HASH}"
         echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env
         echo "Generated IMAGE_TAG=${IMAGE_TAG}"
       - cat .build_env

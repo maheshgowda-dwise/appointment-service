@@ -34,10 +34,8 @@ steps:
   image: docker:27.1.1-cli
   privileged: true
   environment:
-    DOCKER_USERNAME:
-      from_secret: DOCKER_USERNAME
-    DOCKER_PASSWORD:
-      from_secret: DOCKER_PASSWORD
+    DOCKER_USERNAME: ${DOCKER_USERNAME}
+    DOCKER_PASSWORD: ${DOCKER_PASSWORD}
   commands:
     - apk add --no-cache bash coreutils
     - source /drone/src/.build_env || true
@@ -64,10 +62,8 @@ steps:
     STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
     VALUES_SERVICE_NAME: appointment
     SERVICE_NAME: lt-be-apnt-service
-    STACK_GIT_USER:
-      from_secret: STACK_GIT_USER
-    STACK_GIT_TOKEN:
-      from_secret: STACK_GIT_TOKEN
+    STACK_GIT_USER: ${STACK_GIT_USER}
+    STACK_GIT_TOKEN: ${STACK_GIT_TOKEN}
   commands:
     - apk add --no-cache bash coreutils
     - source /drone/src/.build_env || true

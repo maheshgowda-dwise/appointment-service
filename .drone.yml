@@ -44,7 +44,7 @@ steps:
       - source .build_env
       - set +a
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-      - echo "Using tag: ${IMAGE_TAG}"
+     
       - docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
       - docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
     volumes:

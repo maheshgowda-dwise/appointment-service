@@ -1,85 +1,95 @@
 kind: pipeline
 type: docker
 name: appointment-service-ci
+
+# Global volumes for caching and Docker access
+volumes:
+  - name: m2_cache
+    temp: {}
+  - name: docker_sock
+    host:
+      path: /var/run/docker.sock
+
 steps:
-  # ─────────────────────────────── Prepare ────────────────────────────────
+  # ─────────────────────────────── 1. Prepare ───────────────────────────────────
+  # Generates a unique image tag and shares it with subsequent steps.
   - name: prepare
     image: alpine:3.18
     environment:
       TAG_PREFIX: v2qa
     commands:
-      - apk add --no-cache git bash jq
+      - apk add --no-cache git bash
       - COMMIT_HASH=$(git rev-parse --short HEAD)
       - TIMESTAMP=$(date -u +%Y%m%d%H%M)
       - IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
-      - echo "COMMIT_HASH=${COMMIT_HASH}" > /drone/src/.build_env
-      - echo "IMAGE_TAG=${IMAGE_TAG}" >> /drone/src/.build_env
-  # ─────────────────────────────── Maven Build ─────────────────────────────
+      # Persist the IMAGE_TAG variable for other steps
+      - echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env
+
+  # ─────────────────────────── 2. Maven Build ─────────────────────────────────
+  # Compiles the Java application and creates a JAR file.
   - name: maven-build
     image: maven:3.9-eclipse-temurin-17
     commands:
-      - source /drone/src/.build_env || true
-      - echo "Running Maven build..."
       - mvn clean package -DskipTests
     volumes:
-      - name: m2
+      - name: m2_cache
         path: /root/.m2
     depends_on:
       - prepare
-  # ─────────────────────────────── Docker Build & Push ─────────────────────
+
+  # ────────────────────── 3. Docker Build & Push ──────────────────────────
+  # Builds the Docker image and pushes it to Docker Hub.
   - name: docker-build-push
-    image: docker:27.1.1-cli
+    image: docker:20.10.17-cli
     privileged: true
-    environment:
-      DOCKER_USERNAME: ${DOCKER_USERNAME}
-      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
+    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD ]
     commands:
-      - apk add --no-cache bash coreutils
-      - source /drone/src/.build_env || true
+      - apk add --no-cache bash
+      - source .build_env
       - echo "🔐 Logging into Docker Hub..."
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       - echo "🐳 Building Docker image..."
-      - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} .
-      - docker tag maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} maheshgowdamg25/lt-be-apnt-service:latest
+      - docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
+      - docker tag "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" "maheshgowdamg25/lt-be-apnt-service:latest"
       - echo "🚀 Pushing Docker images..."
-      - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}
-      - docker push maheshgowdamg25/lt-be-apnt-service:latest
+      - docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
+      - docker push "maheshgowdamg25/lt-be-apnt-service:latest"
     volumes:
       - name: docker_sock
         path: /var/run/docker.sock
     depends_on:
       - maven-build
-  # ─────────────────────────────── Update Helm Values ────────────────────────
-  - name: bump-stack-values
+
+  # ─────────────────── 4. Update Helm Values in GitOps Repo ───────────────────
+  # Clones the ArgoCD repo, updates the image tag in values.yaml, and pushes the change.
+  - name: update-helm-values
     image: alpine/git:2.40.1
+    secrets: [ STACK_GIT_USER, STACK_GIT_TOKEN ]
     environment:
       STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
       STACK_BRANCH: main
+      # IMPORTANT: Adjust this path to your values.yaml file in the Argocd repo
       STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
       VALUES_SERVICE_NAME: appointment
       SERVICE_NAME: lt-be-apnt-service
-      STACK_GIT_USER: ${STACK_GIT_USER}
-      STACK_GIT_TOKEN: ${STACK_GIT_TOKEN}
     commands:
-      - apk add --no-cache bash coreutils
-      - source /drone/src/.build_env || true
+      - apk add --no-cache bash sed
+      - source .build_env
+      - echo "Cloning GitOps repository..."
       - git clone "$STACK_REPO" /tmp/stack
       - cd /tmp/stack
       - git fetch origin "$STACK_BRANCH" --prune
       - git checkout "$STACK_BRANCH"
-      - echo "Updating image in $STACK_FILE for $VALUES_SERVICE_NAME"
-      - sed -i "s|maheshgowdamg25/lt-be-apnt-service:.*|maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}|g" "$STACK_FILE"
+      - echo "Updating image tag in $STACK_FILE"
+      # This updated sed command correctly targets the 'image:' line based on your values.yaml structure
+      - sed -i -E "s|^( *image: maheshgowdamg25/lt-be-apnt-service:).*|\1${IMAGE_TAG}|" "$STACK_FILE"
+      - echo "Configuring git..."
       - git config --global user.email "mahesh.g@lifetrenz.com"
       - git config --global user.name "maheshgowda-dwise"
       - git add "$STACK_FILE"
-      - 'git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"'
+      - 'git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit."'
+      - echo "Pushing changes to GitOps repo..."
       - AUTH_URL=$(echo "$STACK_REPO" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")
       - git push "$AUTH_URL" "$STACK_BRANCH"
     depends_on:
       - docker-build-push
-volumes:
-  - name: m2
-    temp: {}
-  - name: docker_sock
-    host:
-      path: /var/run/docker.sock

@@ -3,97 +3,14 @@ type: docker
 name: appointment-service-ci
 
 steps:
-  # ─────────────────────────────── 1. Prepare ───────────────────────────────────
-  # Generates a unique image tag and shares it with subsequent steps.
-  - name: prepare
-    image: alpine:3.18
-    environment:
-      TAG_PREFIX: v2qa
-    commands:
-      - apk add --no-cache git bash
-      - COMMIT_HASH=$(git rev-parse --short HEAD)
-      - TIMESTAMP=$(date -u +%Y%m%d%H%M)
-      - IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
-      # Persist the IMAGE_TAG variable for other steps
-      - echo "export IMAGE_TAG=${IMAGE_TAG}" > .build_env
-
-  # ─────────────────────────── 2. Maven Build ─────────────────────────────────
-  # Compiles the Java application using a cached Maven repository.
-  - name: maven-build
+  - name: maven-clean
     image: maven:3.9-eclipse-temurin-17
     commands:
-      - mvn clean package -DskipTests
+      - mvn -B clean
     volumes:
       - name: m2_cache
         path: /root/.m2
-    depends_on:
-      - prepare
 
-  # ────────────────────── 3. Docker Build & Push ──────────────────────────
-  # Builds the Docker image and pushes it to Docker Hub.
-  - name: docker-build-push
-    image: docker:20.10.17-cli
-    privileged: true
-    secrets: [ DOCKER_USERNAME, DOCKER_PASSWORD ]
-    commands:
-      - apk add --no-cache bash
-      - source .build_env
-      - echo "🔐 Logging into Docker Hub..."
-      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-      - echo "🐳 Building Docker image..."
-      - docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
-      - docker tag "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" "maheshgowdamg25/lt-be-apnt-service:latest"
-      - echo "🚀 Pushing Docker images..."
-      - docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
-      - docker push "maheshgowdamg25/lt-be-apnt-service:latest"
-    volumes:
-      - name: docker_sock
-        path: /var/run/docker.sock
-    depends_on:
-      - maven-build
-
-  # ─────────────────── 4. Update Helm Values in GitOps Repo ───────────────────
-  # Clones the ArgoCD repo, updates the image tag in values.yaml, and pushes the change.
-  - name: update-helm-values
-    image: alpine/git:2.40.1
-    secrets: [ STACK_GIT_USER, STACK_GIT_TOKEN ]
-    environment:
-      STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
-      STACK_BRANCH: main
-      # IMPORTANT: Adjust this path if your values.yaml is in a different location
-      STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
-      VALUES_SERVICE_NAME: appointment
-      SERVICE_NAME: lt-be-apnt-service
-    commands:
-      - apk add --no-cache bash sed
-      - source .build_env
-      - echo "Cloning GitOps repository..."
-      - git clone "$STACK_REPO" /tmp/stack
-      - cd /tmp/stack
-      - git fetch origin "$STACK_BRANCH" --prune
-      - git checkout "$STACK_BRANCH"
-      - echo "Updating image tag in $STACK_FILE"
-      # This command is tailored to your values.yaml structure:
-      # service:
-      #   image: user/repo:tag
-      - sed -i -E "s|^( *image: maheshgowdamg25/lt-be-apnt-service:).*|\1${IMAGE_TAG}|" "$STACK_FILE"
-      - echo "Configuring git..."
-      - git config --global user.email "ci@drone.local"
-      - git config --global user.name "Drone CI"
-      - git add "$STACK_FILE"
-      - 'git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit."'
-      - echo "Pushing changes to GitOps repo..."
-      - AUTH_URL=$(echo "$STACK_REPO" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")
-      - git push "$AUTH_URL" "$STACK_BRANCH"
-    depends_on:
-      - docker-build-push
-
-# --- Top-Level Volume Definitions ---
-# This block defines shared volumes for the pipeline.
-# It must be at the root level (no indentation).
 volumes:
   - name: m2_cache
     temp: {}
-  - name: docker_sock
-    host:
-      path: /var/run/docker.sock

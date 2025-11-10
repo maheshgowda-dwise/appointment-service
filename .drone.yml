@@ -43,8 +43,8 @@ steps:
       - echo "Updating values.yaml with image: ${NEW_IMAGE}"
       - yq e -i ".service.image = \"${NEW_IMAGE}\"" values.yaml
 
-      - git config --global user.email "drone@ci"
-      - git config --global user.name "drone-ci"
+      - git config --global user.email "mahesh.g@lifetrenz.com"
+      - git config --global user.name "maheshgowda-dwise"
       - git add values.yaml
       - git commit -m "ci: update image to ${NEW_IMAGE} (commit: ${COMMIT_ID})"
       - git push origin main

@@ -80,7 +80,7 @@ steps:
       - git config --global user.email "ci@lifetrenz.local"
       - git config --global user.name "Lifetrenz CI"
       - git add "$STACK_FILE"
-      - git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"
+      - 'git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"'
       - AUTH_URL=$(echo "$STACK_REPO" | sed -E "s#https://#https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@#")
       - git push "$AUTH_URL" "$STACK_BRANCH"
     depends_on:

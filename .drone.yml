@@ -12,7 +12,7 @@ steps:
       - name: m2_cache
         path: /root/.m2
 
-  # Step 2: Docker Build & Push (Generate tag here directly)
+  # Step 2: Docker Build & Push with dynamic IMAGE_TAG
   - name: docker-build-push
     image: docker:20.10.17-cli
     privileged: true
@@ -24,14 +24,14 @@ steps:
         from_secret: DOCKER_PASSWORD
     commands:
       - apk add --no-cache bash git coreutils
-      # generate tag directly here ✅
-      - COMMIT_HASH=$(git rev-parse --short HEAD)
-      - TIMESTAMP=$(date -u +%Y%m%d%H%M)
-      - IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
-      - echo "Using image tag: $IMAGE_TAG"
-      - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
-      - docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
-      - docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
+      - |
+        COMMIT_HASH=$(git rev-parse --short HEAD)
+        TIMESTAMP=$(date -u +%Y%m%d%H%M)
+        IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
+        echo "Using tag: ${IMAGE_TAG}"
+        echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+        docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
+        docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
     volumes:
       - name: docker_sock
         path: /var/run/docker.sock

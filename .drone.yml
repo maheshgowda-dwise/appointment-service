@@ -1,54 +1,147 @@
+---
 kind: pipeline
 type: docker
-name: appointment-service-ci-cd
+name: build-test-release
+
+# Environment variables
+environment:
+  # Service details
+  SERVICE_NAME: lt-be-apnt-service
+  TAG_PREFIX: v2qa
+  MAVEN_IMAGE: maven:3.9-eclipse-temurin-17
+  
+  # Docker Hub details
+  DOCKER_HUB_REPO: maheshgowdamg25/lt-be-apnt-service
+  
+  # Stack Repo details
+  STACK_REPO_URL: https://github.com/maheshgowda-dwise/Argocd.git
+  STACK_BRANCH: main 
+  STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
+  VALUES_SERVICE_NAME: appointment
+  STACK_LOCAL_DIR_NAME: Argocd-Stack
+  
+  # Git credentials for stack repo (if required)
+  STACK_REPO_USER_VAR:
+    from_secret: STACK_REPO_USER
+  STACK_REPO_TOKEN_VAR:
+    from_secret: STACK_REPO_TOKEN
 
 steps:
+  
+  # 1. Maven Build inside a Docker container
   - name: maven-build
-    image: maven:3.9.6-eclipse-temurin-17
+    image: ${MAVEN_IMAGE}
+    volumes:
+      # Cache for Maven dependencies
+      - name: m2-cache
+        path: /root/.m2
     commands:
-      - echo "Starting Maven build..."
-      - mvn clean package -DskipTests
-      - echo "Maven build completed."
-
+      # <-- MODIFIED: Using the requested simpler command
+      - **mvn clean install -DskipTests**
+      
+  # 2. Build and Push Docker Image to Docker Hub
   - name: docker-build-push
     image: plugins/docker
     settings:
-      repo: maheshgowdamg25/lt-be-apnt-service
-      dockerfile: Dockerfile
+      # Tags: v2qa-YYYYMMDDHHMM-commitsha
+      repo: ${DOCKER_HUB_REPO}
       tags:
-        # Image tag will look like: v2qa-<build>-<commit-id>
-        - v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
+        - ${TAG_PREFIX}-${DRONE_DATE}-latest
+        - ${TAG_PREFIX}-${DRONE_DATE}-${DRONE_COMMIT_SHA:0:8} 
       username:
         from_secret: DOCKER_USERNAME
       password:
         from_secret: DOCKER_PASSWORD
+    when:
+      branch: main 
+      event: push
 
-  - name: update-argocd-stack
-    image: alpine:latest
+  # 3. Clone Stack Repo
+  - name: clone-stack-repo
+    image: alpine/git
+    volumes:
+      - name: stack-repo
+        path: /stack
     environment:
-      STACK_GIT_USER:
-        from_secret: STACK_GIT_USER
-      STACK_GIT_TOKEN:
-        from_secret: STACK_GIT_TOKEN
+      GIT_URL: ${STACK_REPO_URL}
+      GIT_USER: ${STACK_REPO_USER_VAR}
+      GIT_TOKEN: ${STACK_REPO_TOKEN_VAR}
     commands:
-      - apk add --no-cache git yq
-      - echo "Cloning ArgoCD stack repo..."
-      - git clone https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@github.com/maheshgowda-dwise/Argocd.git
-      - cd Argocd/LT-QA/BE-Projects/BE-Canary-Helm-Unified
+      - |
+        if [ -n "$GIT_USER" ] && [ -n "$GIT_TOKEN" ]; then
+          REPO_URL_WITH_CREDS="${GIT_URL/https:\/\//https:\/\/${GIT_USER}:${GIT_TOKEN}@}"
+        else
+          REPO_URL_WITH_CREDS="$GIT_URL"
+        fi
+        
+        git clone --branch ${STACK_BRANCH} "$REPO_URL_WITH_CREDS" /stack/${STACK_LOCAL_DIR_NAME}
+    when:
+      branch: main
+      event: push
 
-      # Use commit ID from appointment-service repo
-      - COMMIT_ID=${DRONE_COMMIT_SHA:0:7}
-      - NEW_TAG="v2qa-${DRONE_BUILD_NUMBER}-${COMMIT_ID}"
-      - NEW_IMAGE="maheshgowdamg25/lt-be-apnt-service:${NEW_TAG}"
-      - echo "Updating values.yaml with image: ${NEW_IMAGE}"
-      - yq e -i ".service.image = \"${NEW_IMAGE}\"" values.yaml
+  # 4. Check for Up-to-Date and Update Stack File
+  - name: update-stack-repo
+    image: alpine/git
+    volumes:
+      - name: stack-repo
+        path: /stack
+    environment:
+      STACK_FILE_PATH: /stack/${STACK_LOCAL_DIR_NAME}/${STACK_FILE}
+      NEW_IMAGE: ${DOCKER_HUB_REPO}:${TAG_PREFIX}-${DRONE_DATE}-${DRONE_COMMIT_SHA:0:8}
+      SERVICE_NAME_SLUG: ${VALUES_SERVICE_NAME}
+      COMMIT_HASH_SHORT: ${DRONE_COMMIT_SHA:0:8}
+      
+      # Git credentials for stack repo push
+      GIT_USER: ${STACK_REPO_USER_VAR}
+      GIT_TOKEN: ${STACK_REPO_TOKEN_VAR}
+      
+    commands:
+      - apk add --no-cache bash sed
+      - cd /stack/${STACK_LOCAL_DIR_NAME}
+      
+      # 4a. Up-to-date check against values file
+      - echo "New Image Tag: ${NEW_IMAGE}"
+      - |
+        if grep -q "${COMMIT_HASH_SHORT}" "${STACK_FILE_PATH}"; then
+          echo "Up to date: Commit ${COMMIT_HASH_SHORT} already found in ${STACK_FILE}. Skipping push."
+          exit 0
+        fi
+        echo "Commit ${COMMIT_HASH_SHORT} not found. Proceeding with update."
+        
+      # 4b. Update image in values.yaml using sed
+      - |
+        sed -E "
+        /^[[:space:]]*-[[:space:]]name:[[:space:]]*${SERVICE_NAME_SLUG}[[:space:]]*$/,/^[[:space:]]*-[[:space:]]name:[[:space:]]*/ {
+          /^[[:space:]]*image:[[:space:]]*/ s|^([[:space:]]*image:[[:space:]]*).*$|\1${NEW_IMAGE}|
+        }
+        " "${STACK_FILE_PATH}" > "${STACK_FILE_PATH}.tmp"
+        mv "${STACK_FILE_PATH}.tmp" "${STACK_FILE_PATH}"
 
-      - git config --global user.email "mahesh.g@lifetrenz.com"
-      - git config --global user.name "maheshgowda-dwise"
-      - git add values.yaml
-      - git commit -m "ci: update image to ${NEW_IMAGE} (commit: ${COMMIT_ID})"
-      - git push origin main
-      - echo "✅ Updated values.yaml in Argocd repo with image tag ${NEW_TAG}"
+      # 4c. Commit and Push the change
+      - git config user.email "ci@drone.local"
+      - git config user.name "Drone CI/CD"
+      - git add "${STACK_FILE}"
+      - git commit -m "chore(${SERVICE_NAME}): ${SERVICE_NAME_SLUG} -> ${TAG_PREFIX}-${COMMIT_HASH_SHORT}" || echo "No changes to commit"
+      - |
+        if [ -n "$GIT_USER" ] && [ -n "$GIT_TOKEN" ]; then
+          REPO_URL_WITH_CREDS="${STACK_REPO_URL/https:\/\//https:\/\/${GIT_USER}:${GIT_TOKEN}@}"
+        else
+          REPO_URL_WITH_CREDS="${STACK_REPO_URL}"
+        fi
+        
+        git push "${REPO_URL_WITH_CREDS}" ${STACK_BRANCH}
+        echo "Values updated and pushed: ${NEW_IMAGE}"
+    when:
+      branch: main
+      event: push
+
+volumes:
+  - name: m2-cache
+    host:
+      path: /tmp/drone/m2_cache
+  - name: stack-repo
+    host:
+      path: /tmp/drone/stack_repo
 
 trigger:
   branch:

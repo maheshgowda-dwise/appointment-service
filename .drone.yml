@@ -14,7 +14,7 @@ steps:
       - TIMESTAMP="$(date -u +%Y%m%d%H%M)"
       - IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
       - echo "IMAGE_TAG=${IMAGE_TAG}"
-      - echo "export IMAGE_TAG=${IMAGE_TAG}" > .build_env
+      - echo "IMAGE_TAG=${IMAGE_TAG}" > .build_env
 
   # Step 1: Maven build (skip tests)
   - name: maven-build
@@ -27,7 +27,7 @@ steps:
     depends_on:
       - prepare
 
-  # ✅ Step 3: Docker Build + Push (Docker Hub)
+  # ✅ Step 3: Docker Build + Push (NO `latest` tag)
   - name: docker-build-push
     image: docker:20.10.17-cli
     privileged: true
@@ -38,12 +38,12 @@ steps:
         from_secret: DOCKER_PASSWORD
     commands:
       - apk add --no-cache bash
+      - set -a
       - source .build_env
+      - set +a
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       - docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .
-      - docker tag "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" "maheshgowdamg25/lt-be-apnt-service:latest"
       - docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
-      - docker push "maheshgowdamg25/lt-be-apnt-service:latest"
     volumes:
       - name: docker_sock
         path: /var/run/docker.sock

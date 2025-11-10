@@ -1,45 +1,54 @@
 kind: pipeline
 type: docker
-name: appointment-service-ci
+name: build-deploy-appointment-service
 
 steps:
+  - name: clone-stack-repo
+    image: alpine/git
+    environment:
+      GIT_USERNAME:
+        from_secret: STACK_GIT_USER
+      GIT_PASSWORD:
+        from_secret: STACK_GIT_TOKEN
+    commands:
+      - git clone https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/maheshgowda-dwise/Argocd.git stack-repo
+
   - name: maven-build
     image: maven:3.9-eclipse-temurin-17
     commands:
-      - mvn -B clean package -DskipTests
-    volumes:
-      - name: m2_cache
-        path: /root/.m2
+      - mvn -B -ntp -Dmaven.repo.local=/root/.m2/repository clean install -DskipTests
 
   - name: docker-build-push
-    image: docker:20.10.17-cli
-    privileged: true
-    environment:
-      TAG_PREFIX: v2qa
-      DOCKER_USERNAME:
+    image: plugins/docker
+    settings:
+      repo: maheshgowdamg25/lt-be-apnt-service
+      tags:
+        - v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA}
+      dockerfile: Dockerfile
+      username:
         from_secret: DOCKER_USERNAME
-      DOCKER_PASSWORD:
+      password:
         from_secret: DOCKER_PASSWORD
-    commands:
-      - apk add --no-cache bash git coreutils
-      - bash -c '
-          COMMIT_HASH=$(git rev-parse --short HEAD);
-          TIMESTAMP=$(date -u +%Y%m%d%H%M);
-          IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}";
-          echo "Using IMAGE_TAG: ${IMAGE_TAG}";
-          echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin;
-          docker build -t "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}" .;
-          docker push "maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}";
-        '
-    volumes:
-      - name: docker_sock
-        path: /var/run/docker.sock
-    depends_on:
-      - maven-build
 
-volumes:
-  - name: m2_cache
-    temp: {}
-  - name: docker_sock
-    host:
-      path: /var/run/docker.sock
+  - name: update-helm-values
+    image: alpine
+    environment:
+      GIT_USERNAME:
+        from_secret: STACK_GIT_USER
+      GIT_PASSWORD:
+        from_secret: STACK_GIT_TOKEN
+      IMAGE_TAG: v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA}
+    commands:
+      - apk add --no-cache bash git
+      - cd stack-repo/LT-QA/BE-Projects/BE-Canary-Helm-Unified
+      - sed -i "s|image:.*|image: maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}|" values.yaml
+      - git config user.email "ci@lifetrenz.local"
+      - git config user.name "Lifetrenz CI"
+      - git add values.yaml
+      - git commit -m "chore(appointment): bump image to ${IMAGE_TAG}" || echo "No changes to commit"
+      - git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/maheshgowda-dwise/Argocd.git HEAD:main
+
+trigger:
+  event:
+    - push
+    - manual

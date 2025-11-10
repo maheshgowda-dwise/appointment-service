@@ -10,6 +10,7 @@ steps:
       TAG_PREFIX: v2qa
     commands:
       - apk add --no-cache git bash coreutils
+      - export TAG_PREFIX="${TAG_PREFIX}"
       - |
         bash -c '
         COMMIT_HASH=$(git rev-parse --short HEAD)

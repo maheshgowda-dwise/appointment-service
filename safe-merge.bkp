@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# Safe force-sync script to update Dev-K8s from development
+# Preserves selected files and authenticates with GitLab using token
+
+set -e
+
+SOURCE_BRANCH="development"
+TARGET_BRANCH="Dev-K8s"
+REPO_URL="https://git.lifetrenz.com/novel/his-ehr/be/appointment-service.git"
+PRESERVE_FILES=("safe-merge.sh" "Dockerfile" "pom.xml" ".gitlab-ci.yml" "src/main/resources/bootstrap.yml")
+
+echo "📌 Starting safe merge process..."
+
+# 🔐 Inject GitLab token dynamically for all Git commands
+echo "🔐 Setting Git credential helper for token auth"
+git config --global credential.helper "!f() { echo username=gitlab-ci; echo password=$GIT_TOKEN; }; f"
+
+# 🔁 Ensure remote origin uses the tokenized HTTPS URL
+echo "🔁 Forcing Git remote to use token"
+git config --unset-all remote.origin.url || true
+git config --add remote.origin.url "https://${GIT_TOKEN}@${REPO_URL#https://}"
+echo "✅ Remote set:"
+git remote -v
+
+# 🧹 Clean working directory before switching branches
+echo "🧹 Cleaning working directory..."
+git reset --hard
+git clean -fd
+
+# 🔄 Switch to target branch
+echo "🔄 Checking out branch: $TARGET_BRANCH"
+git checkout "$TARGET_BRANCH"
+
+# Re-set remote again after branch switch (sometimes Git overwrites it)
+git config --unset-all remote.origin.url || true
+git config --add remote.origin.url "https://${GIT_TOKEN}@${REPO_URL#https://}"
+
+echo "📥 Pulling latest changes for $TARGET_BRANCH"
+git pull origin "$TARGET_BRANCH"
+
+# 🔁 Fetch latest source branch
+echo "🚚 Fetching source branch: $SOURCE_BRANCH"
+git fetch origin "$SOURCE_BRANCH:$SOURCE_BRANCH"
+
+# 🛡️ Backup preserved files
+echo "🛡️ Backing up preserved files..."
+for file in "${PRESERVE_FILES[@]}"; do
+  if [ -f "$file" ]; then
+    cp "$file" "$file.bak"
+    echo "   🔄 Backed up: $file"
+  fi
+done
+
+# 💥 Hard reset to match source branch
+echo "💥 Resetting $TARGET_BRANCH to $SOURCE_BRANCH"
+git reset --hard "origin/$SOURCE_BRANCH"
+
+# ♻️ Restore preserved files
+echo "♻️ Restoring preserved files..."
+for file in "${PRESERVE_FILES[@]}"; do
+  if [ -f "$file.bak" ]; then
+    mv "$file.bak" "$file"
+    git add "$file"
+    echo "   ✅ Restored: $file"
+  fi
+done
+
+# 📦 Commit restored files
+echo "📦 Committing restored files..."
+git commit -m "Force-sync with development and restore preserved files" || echo "✅ No changes to commit"
+
+# 🚀 Push changes
+echo "🚀 Pushing to remote branch: $TARGET_BRANCH"
+git push --force origin "$TARGET_BRANCH"
+
+# 📦 Pop stash if it exists
+echo "📦 Restoring stashed changes (if any)..."
+git stash pop || echo "✅ No stash to apply"
+
+echo "✅ Safe merge completed successfully!"

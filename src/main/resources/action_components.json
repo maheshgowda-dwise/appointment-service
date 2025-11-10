@@ -1,0 +1,14 @@
+[
+	{
+		"name": "Delete Patient ID Details",
+		"description": "Delete Patient ID Details",
+		"identifierCode": "DEL-PAT-ID",
+		"access":[]
+	},
+	{
+		"name": "Delete Patient File",
+		"description": "Delete Patient File",
+		"identifierCode": "DEL-PAT-FLE",
+		"access":[]
+	}
+]

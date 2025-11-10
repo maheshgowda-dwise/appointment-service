@@ -1,0 +1,89 @@
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME}
+  profiles:
+    active:
+      - ${SPRING_PROFILE_ACTIVE}
+  cloud:
+    config:
+      enabled: ${SPRING_CLOUD_CONIFG_ENABLED}
+    kubernetes:
+      discovery:
+        enabled: ${SPRING_CLOUD_KUBERNETES_DISCOVERY_ENABLED}
+  kafka:
+    bootstrap-servers:
+      - ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
+    listener:
+      ack-mode: ${SPRING_KAFKA_LISTENER_ACK_MODE}
+    consumer:
+      enable-auto-commit: ${SPRING_KAFKA_CONSUMER_ENABLED_AUTO_COMMIT}
+      group-id: ${SPRING_KAFKA_CONSUMER_GROUP_ID}
+      auto-offset-reset: ${SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET}
+      key-deserializer: ${SPRING_KAFKA_CONSUMER_KEY_DESERIALIZER}
+      value-deserializer: ${SPRING_KAFKA_CONSUMER_VALUE_DESERIALIZER}
+    producer:
+      key-serializer: ${SPRING_KAFKA_PRODUCER_KEY_SERIALIZER}
+      value-serializer: ${SPRING_KAFKA_PRODUCER_VALUE_SERIALIZER}
+      properties:
+        acks: ${SPRING_KAFKA_PRODUCER_PROPERTIES_ACKS}
+        retries: ${SPRING_KAFKA_PRODUCER_PROPERTIES_RETRIES}
+        retry.backoff.ms: ${SPRING_KAFKA_PRODUCER_PROPERTIES_RETRYBACKOFFMS}
+  data:
+    mongodb:
+      host: ${SPRING_DATA_MONGODB_HOST}
+      port: ${SPRING_DATA_MONGODB_PORT}
+      username: ${SPRING_DATA_MONGODB_USERNAME}
+      password: ${SPRING_DATA_MONGODB_PASSWORD}
+
+      # uri: mongodb://root:kzy3PkZQEfF3aG6AxDYv@mongo-mongodb:27017/LTHS-OPD
+      database: ${SPRING_DATA_MONGODB_DATABASE}
+      auto-index-creation: ${SPRING_DATA_MONGODB_AUTO_INDEX_CREATION}
+
+feign:
+  httpclient:
+    enabled: ${FEIGN_HTTPCLIENT_ENABLED}
+  compression:
+    request:
+      min-request-size: ${FEIGN_COMPRESSION_REQUEST_MIN_REQUEST_SIZE}
+      enabled: ${FEIGN_COMPRESSION_REQUEST_ENABLED}
+      mime-types: ${FEIGN_COMPRESSION_REQUEST_MIME_TYPES}
+    response:
+      enabled: ${FEIGN_COMPRESSION_RESPONSE_ENABLED}
+      useGzipDecoder: ${FEIGN_COMPRESSION_RESPONSE_USEGZIPDECODER}
+
+management:
+  security:
+    enabled: ${MANAGEMENT_SECURITY_ENABLED}
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEBEXPOSUREINCLUDE}
+  endpoint:
+    prometheus:
+      enabled: ${MANAGEMENT_ENDPOINT_PROMETHEUSENABLED}
+
+resilience4j:
+  retry:
+    instances:
+      kafkaRetry:
+        maxRetryAttempts: ${RESILIENCE4J_RETRY_INSTANCES_KAFKARETRY_MAXRETRYATTEMPTS}
+        waitDuration: ${RESILIENCE4J_RETRY_INSTANCES_KAFKARETRY_WAITDURATION}
+        retryExceptions:
+          - ${RESILIENCE4J_RETRY_INSTANCES_KAFKARETRY_RETRYEXCEPTIONS}
+  circuitbreaker:
+    instances:
+      kafkaCircuitBreaker:
+        registerHealthIndicator: ${RESILIENCE4J_CIRCUITBREAKER_INSTANCES_KAFKACIRCUITBREAKER_REGISTERHEALTHINDICATOR}
+        ringBufferSizeInClosedState: ${RESILIENCE4J_CIRCUITBREAKER_INSTANCES_KAFKACIRCUITBREAKER_RINGBUFFERSIZEINCLOSEDSTATE}
+        ringBufferSizeInHalfOpenState: ${RESILIENCE4J_CIRCUITBREAKER_INSTANCES_KAFKACIRCUITBREAKER_RINGBUFFERSIZEINOPENSTATE}
+        failureRateThreshold: ${RESILIENCE4J_CIRCUITBREAKER_INSTANCES_KAFKACIRCUITBREAKER_FAILURERATETHRESHOLD}
+        waitDurationInOpenState: ${RESILIENCE4J_CIRCUITBREAKER_INSTANCES_KAFKACIRCUITBREAKER_WAITDURATIONINOPENSTATE}
+
+server:
+  port: ${SERVER_PORT}
+
+debug: ${DEBUG}
+
+kafka-bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
+kafka-consumer-group-id: ${SPRING_KAFKA_CONSUMER_GROUP_ID}
+application-version: ${APPLICATION_VERSION}

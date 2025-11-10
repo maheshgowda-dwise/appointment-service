@@ -1,0 +1,27 @@
+{"properties": [
+  {
+    "name": "db-base-url",
+    "type": "java.lang.String",
+    "description": "A description for 'db-base-url'"
+  },
+  {
+    "name": "core-service-url",
+    "type": "java.lang.String",
+    "description": "A description for 'core-service-url'"
+  },
+  {
+    "name": "auth-service-url",
+    "type": "java.lang.String",
+    "description": "A description for 'auth-service-url'"
+  },
+  {
+    "name": "management.security.enabled",
+    "type": "java.lang.String",
+    "description": "A description for 'management.security.enabled'"
+  },
+  {
+    "name": "application-version",
+    "type": "java.lang.String",
+    "description": "A description for 'application-version'"
+  }
+]}

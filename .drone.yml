@@ -1,54 +1,57 @@
 kind: pipeline
 type: docker
-name: build-deploy-appointment-service
+name: appointment-service-ci-cd
 
 steps:
-  - name: clone-stack-repo
-    image: alpine/git
-    environment:
-      GIT_USERNAME:
-        from_secret: STACK_GIT_USER
-      GIT_PASSWORD:
-        from_secret: STACK_GIT_TOKEN
-    commands:
-      - git clone https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/maheshgowda-dwise/Argocd.git stack-repo
-
   - name: maven-build
-    image: maven:3.9-eclipse-temurin-17
+    image: maven:3.9.6-eclipse-temurin-17
     commands:
-      - mvn -B -ntp -Dmaven.repo.local=/root/.m2/repository clean install -DskipTests
+      - echo "Starting Maven build..."
+      - mvn clean package -DskipTests
+      - echo "Maven build completed."
 
   - name: docker-build-push
     image: plugins/docker
     settings:
       repo: maheshgowdamg25/lt-be-apnt-service
-      tags:
-        - "v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA}"
       dockerfile: Dockerfile
+      tags:
+        # Image tag will look like: v2qa-<build>-<commit-id>
+        - v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
       username:
         from_secret: DOCKER_USERNAME
       password:
         from_secret: DOCKER_PASSWORD
 
-  - name: update-helm-values
-    image: alpine
+  - name: update-argocd-stack
+    image: alpine:latest
     environment:
-      GIT_USERNAME:
+      STACK_GIT_USER:
         from_secret: STACK_GIT_USER
-      GIT_PASSWORD:
+      STACK_GIT_TOKEN:
         from_secret: STACK_GIT_TOKEN
-      IMAGE_TAG: "v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA}"
     commands:
-      - apk add --no-cache bash git
-      - cd stack-repo/LT-QA/BE-Projects/BE-Canary-Helm-Unified
-      - sed -i "s|image:.*|image: maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}|" values.yaml
-      - git config user.email "ci@lifetrenz.local"
-      - git config user.name "Lifetrenz CI"
+      - apk add --no-cache git yq
+      - echo "Cloning ArgoCD stack repo..."
+      - git clone https://${STACK_GIT_USER}:${STACK_GIT_TOKEN}@github.com/maheshgowda-dwise/Argocd.git
+      - cd Argocd/LT-QA/BE-Projects/BE-Canary-Helm-Unified
+
+      # Use commit ID from appointment-service repo
+      - COMMIT_ID=${DRONE_COMMIT_SHA:0:7}
+      - NEW_TAG="v2qa-${DRONE_BUILD_NUMBER}-${COMMIT_ID}"
+      - NEW_IMAGE="maheshgowdamg25/lt-be-apnt-service:${NEW_TAG}"
+      - echo "Updating values.yaml with image: ${NEW_IMAGE}"
+      - yq e -i ".service.image = \"${NEW_IMAGE}\"" values.yaml
+
+      - git config --global user.email "drone@ci"
+      - git config --global user.name "drone-ci"
       - git add values.yaml
-      - git commit -m "chore(appointment): bump image to ${IMAGE_TAG}" || echo "No changes to commit"
-      - git push https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/maheshgowda-dwise/Argocd.git HEAD:main
+      - git commit -m "ci: update image to ${NEW_IMAGE} (commit: ${COMMIT_ID})"
+      - git push origin main
+      - echo "✅ Updated values.yaml in Argocd repo with image tag ${NEW_TAG}"
 
 trigger:
+  branch:
+    - main
   event:
     - push
-    - manual

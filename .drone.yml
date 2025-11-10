@@ -8,14 +8,13 @@ steps:
   image: alpine:3.18
   commands:
     - apk add --no-cache git bash jq
-    - export COMMIT_HASH="$(git rev-parse --short HEAD)"
-    - export TIMESTAMP="$(date -u +%Y%m%d%H%M)"
-    - export IMAGE_TAG="${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}"
+    - export COMMIT_HASH=$(git rev-parse --short HEAD)
+    - export TIMESTAMP=$(date -u +%Y%m%d%H%M)
+    - export IMAGE_TAG=${TAG_PREFIX}-${TIMESTAMP}-${COMMIT_HASH}
     - echo "COMMIT_HASH=${COMMIT_HASH}" > /drone/src/.build_env
     - echo "IMAGE_TAG=${IMAGE_TAG}" >> /drone/src/.build_env
   environment:
-    TAG_PREFIX:
-      value: v2qa
+    TAG_PREFIX: v2qa
   when:
     event:
       - push
@@ -28,33 +27,29 @@ steps:
   commands:
     - apk add --no-cache bash jq coreutils
     - source /drone/src/.build_env || true
-    - git clone --depth 1 "${STACK_REPO}" /tmp/stack
+    - git clone --depth 1 ${STACK_REPO} /tmp/stack
     - cd /tmp/stack
-    - git fetch origin "${STACK_BRANCH}" --prune || true
-    - git checkout "${STACK_BRANCH}" || true
-    - LAST_COMMIT="$(awk -v svc="${VALUES_SERVICE_NAME}" '
+    - git fetch origin ${STACK_BRANCH} --prune || true
+    - git checkout ${STACK_BRANCH} || true
+    - LAST_COMMIT=$(awk -v svc="${VALUES_SERVICE_NAME}" '
         $0 ~ "^-\\s*name:\\s*"svc"$" {inblk=1; next}
         inblk && $0 ~ "^-\\s*name:"   {inblk=0}
         inblk && $0 ~ "^\\s*image:"   {
           if (match($0, /-([0-9]{12})-([0-9a-fA-F]+)/, m)) { print m[2]; exit }
           n=split($0,a,/-/); if(n>0){gsub(/[^0-9a-fA-F]/,"",a[n]); if(length(a[n])>0){print a[n]; exit}}
         }
-      ' "${STACK_FILE}" || true)"
+      ' ${STACK_FILE} || true)
     - echo "Last deployed commit: ${LAST_COMMIT:-<none>}"
     - source /drone/src/.build_env
     - if [ -n "${LAST_COMMIT}" ] && [ "${COMMIT_HASH}" = "${LAST_COMMIT}" ]; then
         echo "✅ No changes detected. Commit ${COMMIT_HASH} already deployed.";
-        exit 78;  # Drone "skip" code
+        exit 78;
       fi
   environment:
-    STACK_REPO:
-      value: https://github.com/maheshgowda-dwise/Argocd.git
-    STACK_BRANCH:
-      value: main
-    STACK_FILE:
-      value: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
-    VALUES_SERVICE_NAME:
-      value: appointment
+    STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
+    STACK_BRANCH: main
+    STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
+    VALUES_SERVICE_NAME: appointment
   depends_on:
     - prepare
 
@@ -64,28 +59,39 @@ steps:
   commands:
     - source /drone/src/.build_env || true
     - echo "Running Maven build..."
-    - mvn -B -ntp -Dmaven.repo.local=/root/.m2/repository clean install -DskipTests
+    - mvn clean package -DskipTests
   volumes:
     - name: m2
       path: /root/.m2
   depends_on:
     - check-up-to-date
 
-# ─────────────────────────────── Docker Build & Push ─────────────────────
+# ─────────────────────────────── Docker Build & Push (Manual) ────────────────
 - name: docker-build-push
-  image: plugins/docker
-  settings:
-    username:
+  image: docker:27.1.1-cli
+  commands:
+    - apk add --no-cache bash coreutils
+    - source /drone/src/.build_env || true
+    - echo "🔐 Logging into Docker Hub..."
+    - echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+    - echo "🐳 Building Docker image..."
+    - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} -f Dockerfile .
+    - echo "🏷️ Tagging latest image..."
+    - docker tag maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} maheshgowdamg25/lt-be-apnt-service:latest
+    - echo "🚀 Pushing image to Docker Hub..."
+    - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}
+    - docker push maheshgowdamg25/lt-be-apnt-service:latest
+    - echo "✅ Docker image pushed successfully: maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
+  environment:
+    DOCKER_USERNAME:
       from_secret: DOCKER_USERNAME
-    password:
+    DOCKER_PASSWORD:
       from_secret: DOCKER_PASSWORD
-    repo: maheshgowdamg25/lt-be-apnt-service
-    tags:
-      - ${IMAGE_TAG}
-      - latest
-    dockerfile: Dockerfile
   depends_on:
     - maven-build
+  volumes:
+    - name: docker_sock
+      path: /var/run/docker.sock
 
 # ─────────────────────────────── Bump Helm Values ────────────────────────
 - name: bump-stack-values
@@ -93,39 +99,38 @@ steps:
   commands:
     - apk add --no-cache bash coreutils
     - source /drone/src/.build_env || true
-    - git clone "${STACK_REPO}" /tmp/stack
+    - git clone ${STACK_REPO} /tmp/stack
     - cd /tmp/stack
-    - git fetch origin "${STACK_BRANCH}" --prune
-    - git checkout "${STACK_BRANCH}"
+    - git fetch origin ${STACK_BRANCH} --prune
+    - git checkout ${STACK_BRANCH}
     - echo "Updating image in ${STACK_FILE} for ${VALUES_SERVICE_NAME}"
     - sed -E "/^[[:space:]]*-[[:space:]]name:[[:space:]]*${VALUES_SERVICE_NAME}[[:space:]]*$/,/^[[:space:]]*-[[:space:]]name:[[:space:]]*/ {
         /^[[:space:]]*image:[[:space:]]*/ s|^([[:space:]]*image:[[:space:]]*).*$|\1maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}|
-      }" "${STACK_FILE}" > "${STACK_FILE}.tmp" && mv "${STACK_FILE}.tmp" "${STACK_FILE}"
-    - git config user.email "ci@lifetrenz.local" || true
-    - git config user.name "Lifetrenz CI" || true
-    - git add "${STACK_FILE}"
+      }" ${STACK_FILE} > ${STACK_FILE}.tmp && mv ${STACK_FILE}.tmp ${STACK_FILE}
+    - git config user.email "ci@lifetrenz.local"
+    - git config user.name "Lifetrenz CI"
+    - git add ${STACK_FILE}
     - git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "No changes to commit"
-    - AUTH_URL="$(echo "${STACK_REPO}" | sed -E "s#https://#https://${STACK_GIT_USER:-git}:${STACK_GIT_TOKEN}@#")"
-    - git push "${AUTH_URL}" "${STACK_BRANCH}"
+    - AUTH_URL=$(echo ${STACK_REPO} | sed -E "s#https://#https://${STACK_GIT_USER:-git}:${STACK_GIT_TOKEN}@#")
+    - git push ${AUTH_URL} ${STACK_BRANCH}
     - echo "✅ Stack repo updated successfully."
   environment:
-    STACK_REPO:
-      value: https://github.com/maheshgowda-dwise/Argocd.git
-    STACK_BRANCH:
-      value: main
-    STACK_FILE:
-      value: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
-    VALUES_SERVICE_NAME:
-      value: appointment
+    STACK_REPO: https://github.com/maheshgowda-dwise/Argocd.git
+    STACK_BRANCH: main
+    STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
+    VALUES_SERVICE_NAME: appointment
     STACK_GIT_USER:
       from_secret: STACK_GIT_USER
     STACK_GIT_TOKEN:
       from_secret: STACK_GIT_TOKEN
-    SERVICE_NAME:
-      value: lt-be-apnt-service
+    SERVICE_NAME: lt-be-apnt-service
   depends_on:
     - docker-build-push
 
+# ─────────────────────────────── Volumes ────────────────────────────────
 volumes:
 - name: m2
   temp: {}
+- name: docker_sock
+  host:
+    path: /var/run/docker.sock

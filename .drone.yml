@@ -40,7 +40,7 @@ steps:
       - echo "🔐 Logging into Docker Hub..."
       - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
       - echo "🐳 Building Docker image..."
-      - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} -f Dockerfile .
+      - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}  .
       - docker tag maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} maheshgowdamg25/lt-be-apnt-service:latest
       - echo "🚀 Pushing Docker images..."
       - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}

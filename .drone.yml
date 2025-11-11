@@ -69,19 +69,13 @@ steps:
       - echo "🔁 Cloning stack repo..."
       - git clone --branch ${STACK_BRANCH} https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://} stack-repo
       - cd stack-repo
-
-      # Generate new tag
       - COMMIT_HASH=$(cat /tmp/commit_hash)
       - IMAGE_TAG="${TAG_PREFIX}-$(date +%Y%m%d%H%M)-${COMMIT_HASH}"
       - NEW_IMAGE="${DOCKER_REPO}:${IMAGE_TAG}"
-      - echo "🖊️ Updating image for '${VALUES_SERVICE_NAME}' → ${NEW_IMAGE}"
-
-      # Update Helm values file safely (single line)
+      - echo "🖊️ Updating image for ${VALUES_SERVICE_NAME} → ${NEW_IMAGE}"
       - sed -i -E "/^[[:space:]]*-[[:space:]]name:[[:space:]]*${VALUES_SERVICE_NAME}[[:space:]]*$/,/^[[:space:]]*-[[:space:]]name:[[:space:]]*/ s|^([[:space:]]*image:[[:space:]]*).*$|\1${NEW_IMAGE}|" ${STACK_FILE_PATH}
-
-      # Commit & push
-      - git config user.email "ci@lifetrenz.local"
-      - git config user.name "Lifetrenz CI"
+      - git config user.email "mahesh.g@lifetrenz.com"
+      - git config user.name "maheshgowda-dwise"
       - git add ${STACK_FILE_PATH}
       - git commit -m "chore(${SERVICE_NAME}): ${VALUES_SERVICE_NAME} -> ${IMAGE_TAG}" || echo "⚠️ No changes to commit"
       - git push origin ${STACK_BRANCH}

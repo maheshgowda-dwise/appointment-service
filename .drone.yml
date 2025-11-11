@@ -25,7 +25,7 @@ steps:
     depends_on:
       - "maven-build"
     settings:
-      repo: "maheshgowdamg25/lt-be-apnt-service"
+      repo: "${DOCKER_HUB_REPO}" # Use environment variable
       username:
         from_secret: "docker_username"
       password:
@@ -53,14 +53,17 @@ steps:
     commands:
       - "apk add --no-cache bash git sed coreutils"
       - "echo '🔁 Cloning stack repo...'"
+      # Clone using token in URL (STACK_REPO_URL#https:// removes the 'https://' prefix)
       - "git clone --branch ${STACK_BRANCH} https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://} stack-repo"
       - "cd stack-repo"
       - "SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)"
       - "IMAGE_TAG=${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${SHORT_COMMIT}"
       - "NEW_IMAGE=${DOCKER_HUB_REPO}:${IMAGE_TAG}"
-      - "STACK_FILE_PATH=stack-repo/${STACK_FILE}"
+      - "STACK_FILE_PATH=${STACK_FILE}" # STACK_FILE is relative to the stack-repo root
       - "echo '🖋️ Updating ${STACK_FILE_PATH} with ${NEW_IMAGE}'"
+      # Check if the commit is already present to avoid redundant commits
       - "if grep -q ${SHORT_COMMIT} ${STACK_FILE_PATH}; then echo '✅ Up to date'; exit 0; fi"
+      # Use the env var STACK_FILE for the sed path inside stack-repo
       - "sed -i \"s|image:.*|image: ${NEW_IMAGE}|g\" ${STACK_FILE_PATH}"
       - "git config user.email 'ci@drone.local'"
       - "git config user.name 'Drone CI'"

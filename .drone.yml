@@ -1,7 +1,7 @@
 ---
 kind: pipeline
 type: docker
-name: build-and-push
+name: build-push-update-stack
 
 steps:
   - name: "maven-build"
@@ -38,6 +38,36 @@ steps:
       tags:
         - "latest"
         - "v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}"
+
+  - name: "update-stack-repo"
+    image: "alpine/git"
+    depends_on:
+      - "docker-build-push"
+    environment:
+      STACK_REPO_URL: "https://github.com/maheshgowda-dwise/Argocd.git"
+      STACK_BRANCH: "main"
+      STACK_FILE: "LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml"
+      VALUES_SERVICE_NAME: "appointment"
+      DOCKER_REPO: "maheshgowdamg25/lt-be-apnt-service"
+      GIT_USER:
+        from_secret: git_user
+      GIT_TOKEN:
+        from_secret: git_token
+    commands:
+      - "apk add --no-cache bash git sed coreutils"
+      - "IMAGE_TAG=$(cat image_tag.txt)"
+      - "NEW_IMAGE=${DOCKER_REPO}:${IMAGE_TAG}"
+      - "echo '🔁 Cloning stack repo...'"
+      - "git clone --branch ${STACK_BRANCH} https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://} stack-repo"
+      - "cd stack-repo"
+      - "echo '🖋️ Updating ${STACK_FILE} with ${NEW_IMAGE}'"
+      - "sed -i \"s|image:.*|image: ${NEW_IMAGE}|g\" ${STACK_FILE}"
+      - "git config user.email 'mahesh.g@lifetrenz.com'"
+      - "git config user.name 'maheshgowda-dwise'"
+      - "git add ${STACK_FILE}"
+      - "git commit -m \"chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}\" || echo '⚠️ No changes to commit'"
+      - "git push origin ${STACK_BRANCH}"
+      - "echo '🚀 Stack repo updated successfully with ${IMAGE_TAG}'"
 
 trigger:
   branch:

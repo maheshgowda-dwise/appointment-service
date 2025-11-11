@@ -4,67 +4,40 @@ type: docker
 name: build-test-release
 
 environment:
-  SERVICE_NAME: lt-be-apnt-service
-  TAG_PREFIX: v2qa
-  MAVEN_IMAGE: maven:3.9-eclipse-temurin-17
-  DOCKER_HUB_REPO: maheshgowdamg25/lt-be-apnt-service
-
-  STACK_REPO_URL: https://github.com/maheshgowda-dwise/Argocd.git
-  STACK_BRANCH: main
-  STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
-  VALUES_SERVICE_NAME: appointment
-  STACK_LOCAL_DIR_NAME: Argocd-Stack
+  SERVICE_NAME: "lt-be-apnt-service"
+  TAG_PREFIX: "v2qa"
+  MAVEN_IMAGE: "maven:3.9-eclipse-temurin-17"
+  DOCKER_HUB_REPO: "maheshgowdamg25/lt-be-apnt-service"
+  STACK_REPO_URL: "https://github.com/maheshgowda-dwise/Argocd.git"
+  STACK_BRANCH: "main"
+  STACK_FILE: "LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml"
+  VALUES_SERVICE_NAME: "appointment"
+  STACK_LOCAL_DIR_NAME: "Argocd-Stack"
 
 steps:
   - name: maven-build
-    image: ${MAVEN_IMAGE}
+    image: maven:3.9-eclipse-temurin-17
     volumes:
       - name: m2-cache
         path: /root/.m2
     commands:
-      - mvn clean install -DskipTests
+      - mvn -B -ntp clean install -DskipTests
 
   - name: docker-build-push
     image: plugins/docker
+    depends_on:
+      - maven-build
     settings:
-      repo: ${DOCKER_HUB_REPO}
+      repo: "maheshgowdamg25/lt-be-apnt-service"
       username:
         from_secret: docker_username
       password:
         from_secret: docker_password
+      dockerfile: "Dockerfile"
+      context: "."
       tags:
-        - ${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-latest
-        - ${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
-    when:
-      branch:
-        - main
-      event:
-        - push
-
-  - name: clone-stack-repo
-    image: alpine/git
-    environment:
-      GIT_URL: ${STACK_REPO_URL}
-      STACK_BRANCH: ${STACK_BRANCH}
-      STACK_LOCAL_DIR_NAME: ${STACK_LOCAL_DIR_NAME}
-    settings:
-      git_user:
-        from_secret: STACK_REPO_USER
-      git_token:
-        from_secret: STACK_REPO_TOKEN
-    volumes:
-      - name: stack-repo
-        path: /stack
-    commands:
-      - |
-        set -e
-        if [ -n "$GIT_USER" ] && [ -n "$GIT_TOKEN" ]; then
-          REPO_URL_WITH_CREDS="${GIT_URL/https:\/\//https:\/\/${GIT_USER}:${GIT_TOKEN}@}"
-        else
-          REPO_URL_WITH_CREDS="$GIT_URL"
-        fi
-        git clone --branch ${STACK_BRANCH} "$REPO_URL_WITH_CREDS" /stack/${STACK_LOCAL_DIR_NAME}
-        echo "✅ Cloned stack repo successfully."
+        - "latest"
+        - "${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA}"
     when:
       branch:
         - main
@@ -73,61 +46,39 @@ steps:
 
   - name: update-stack-repo
     image: alpine/git
+    depends_on:
+      - docker-build-push
     environment:
-      STACK_FILE: ${STACK_FILE}
-      STACK_LOCAL_DIR_NAME: ${STACK_LOCAL_DIR_NAME}
-      STACK_BRANCH: ${STACK_BRANCH}
-      STACK_REPO_URL: ${STACK_REPO_URL}
-      DOCKER_HUB_REPO: ${DOCKER_HUB_REPO}
-      SERVICE_NAME: ${SERVICE_NAME}
-      TAG_PREFIX: ${TAG_PREFIX}
-      DRONE_BUILD_NUMBER: ${DRONE_BUILD_NUMBER}
-      DRONE_COMMIT_SHA: ${DRONE_COMMIT_SHA}
-    settings:
-      git_user:
+      GIT_USER:
         from_secret: STACK_REPO_USER
-      git_token:
+      GIT_TOKEN:
         from_secret: STACK_REPO_TOKEN
-    volumes:
-      - name: stack-repo
-        path: /stack
     commands:
-      - apk add --no-cache bash sed
-      - cd /stack/${STACK_LOCAL_DIR_NAME}
-      - export STACK_FILE_PATH="/stack/${STACK_LOCAL_DIR_NAME}/${STACK_FILE}"
-      - export NEW_IMAGE="${DOCKER_HUB_REPO}:${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}"
-      - echo "🖋️ Updating ${STACK_FILE_PATH} with new image tag: ${NEW_IMAGE}"
-      - |
-        if grep -q "${DRONE_COMMIT_SHA:0:7}" "${STACK_FILE_PATH}"; then
-          echo "✅ Already up to date with this commit, skipping update."
-          exit 0
-        fi
+      - apk add --no-cache bash sed coreutils
+      - echo "🔁 Cloning stack repo..."
+      - >
+        git clone --branch ${STACK_BRANCH}
+        https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://}
+        /stack
+      - cd /stack
+      - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
+      - IMAGE_TAG="${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${SHORT_COMMIT}"
+      - NEW_IMAGE="${DOCKER_HUB_REPO}:${IMAGE_TAG}"
+      - STACK_FILE_PATH="/stack/${STACK_FILE}"
+      - echo "🖋️ Updating ${STACK_FILE_PATH} with new image ${NEW_IMAGE}"
+      - if grep -q "${SHORT_COMMIT}" "${STACK_FILE_PATH}"; then echo "✅ Up to date"; exit 0; fi
       - sed -i "s|image:.*|image: ${NEW_IMAGE}|g" "${STACK_FILE_PATH}"
-      - git config --global user.email "ci@drone.local"
-      - git config --global user.name "Drone CI/CD"
+      - git config user.email "ci@drone.local"
+      - git config user.name "Drone CI/CD"
       - git add "${STACK_FILE}"
-      - git commit -m "chore(${SERVICE_NAME}): update image to ${NEW_IMAGE}" || echo "⚠️ No changes to commit"
-      - |
-        if [ -n "$GIT_USER" ] && [ -n "$GIT_TOKEN" ]; then
-          REPO_URL_WITH_CREDS="${STACK_REPO_URL/https:\/\//https:\/\/${GIT_USER}:${GIT_TOKEN}@}"
-        else
-          REPO_URL_WITH_CREDS="${STACK_REPO_URL}"
-        fi
-        git push "${REPO_URL_WITH_CREDS}" ${STACK_BRANCH}
-        echo "🚀 Stack repo updated and pushed successfully."
-    when:
-      branch:
-        - main
-      event:
-        - push
+      - git commit -m "chore(${SERVICE_NAME}): update image to ${NEW_IMAGE}" || echo "⚠️ No changes"
+      - git push origin ${STACK_BRANCH}
+      - echo "🚀 Stack repo updated successfully."
 
 volumes:
   - name: m2-cache
     host:
       path: /tmp/drone/m2_cache
-  - name: stack-repo
-    host:
-      path: /tmp/drone/stack_repo
 
 trigger:
   branch:

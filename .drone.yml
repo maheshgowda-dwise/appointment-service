@@ -20,32 +20,31 @@ steps:
       - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
       - TIMESTAMP=$(date +%Y%m%d%H%M)
       - IMAGE_TAG="v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
-      - echo "✅ Generated image tag: ${IMAGE_TAG}"
+      - echo "✅ Generated tag: ${IMAGE_TAG}"
       - echo "${IMAGE_TAG}" > /tmp/image_tag
 
   - name: docker-build-push
-    image: plugins/docker
+    image: docker:27.0.3
     depends_on:
       - prepare-tag
-    settings:
-      repo: maheshgowdamg25/lt-be-apnt-service
-      username:
+    environment:
+      DOCKER_REPO: "maheshgowdamg25/lt-be-apnt-service"
+      DOCKER_USERNAME:
         from_secret: docker_username
-      password:
+      DOCKER_PASSWORD:
         from_secret: docker_password
-      dockerfile: Dockerfile
-      context: .
-      tags:
-        - latest
     commands:
-      - echo "🔖 Reading generated tag..."
-      - export IMAGE_TAG=$(cat /tmp/image_tag)
-      - echo "🧱 Building Docker image with tag: ${IMAGE_TAG}"
-      - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} .
-      - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}
-      - docker tag maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} maheshgowdamg25/lt-be-apnt-service:latest
-      - docker push maheshgowdamg25/lt-be-apnt-service:latest
-      - echo "✅ Docker image pushed successfully as ${IMAGE_TAG}"
+      - apk add --no-cache bash coreutils docker-cli
+      - IMAGE_TAG=$(cat /tmp/image_tag)
+      - echo "🔖 Using tag: ${IMAGE_TAG}"
+      - echo "🔐 Logging in to Docker Hub..."
+      - echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+      - echo "🧱 Building Docker image..."
+      - docker build -t ${DOCKER_REPO}:${IMAGE_TAG} -t ${DOCKER_REPO}:latest .
+      - echo "🚀 Pushing image to Docker Hub..."
+      - docker push ${DOCKER_REPO}:${IMAGE_TAG}
+      - docker push ${DOCKER_REPO}:latest
+      - echo "✅ Docker image pushed successfully: ${DOCKER_REPO}:${IMAGE_TAG}"
 
 trigger:
   branch:

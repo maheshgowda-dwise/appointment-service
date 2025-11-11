@@ -49,24 +49,23 @@ steps:
       STACK_FILE: "LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml"
       VALUES_SERVICE_NAME: "appointment"
       DOCKER_REPO: "maheshgowdamg25/lt-be-apnt-service"
-      GIT_USER:
-        from_secret: git_user
-      GIT_TOKEN:
-        from_secret: git_token
     commands:
       - "apk add --no-cache bash git sed coreutils"
       - "IMAGE_TAG=$(cat image_tag.txt)"
       - "NEW_IMAGE=${DOCKER_REPO}:${IMAGE_TAG}"
-      - "echo '🔁 Cloning stack repo...'"
-      - "git clone --branch ${STACK_BRANCH} https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://} stack-repo"
+      - "echo '🔁 Cloning stack repo (public)...'"
+      - "git clone --branch ${STACK_BRANCH} ${STACK_REPO_URL} stack-repo"
       - "cd stack-repo"
-      - "echo '🖋️ Updating ${STACK_FILE} with ${NEW_IMAGE}'"
-      - "sed -i \"s|image:.*|image: ${NEW_IMAGE}|g\" ${STACK_FILE}"
+      - "FILE_PATH=${STACK_FILE}"
+      - "echo '🖋️ Checking if update needed in ${FILE_PATH}'"
+      - "if grep -q ${IMAGE_TAG} ${FILE_PATH}; then echo '✅ Already updated with ${IMAGE_TAG}, skipping commit.'; exit 0; fi"
+      - "echo '🖋️ Updating ${FILE_PATH} with ${NEW_IMAGE}'"
+      - "sed -i \"s|image:.*|image: ${NEW_IMAGE}|g\" ${FILE_PATH}"
       - "git config user.email 'mahesh.g@lifetrenz.com'"
       - "git config user.name 'maheshgowda-dwise'"
-      - "git add ${STACK_FILE}"
+      - "git add ${FILE_PATH}"
       - "git commit -m \"chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}\" || echo '⚠️ No changes to commit'"
-      - "git push origin ${STACK_BRANCH}"
+      - "git push https://github.com/maheshgowda-dwise/Argocd.git ${STACK_BRANCH}"
       - "echo '🚀 Stack repo updated successfully with ${IMAGE_TAG}'"
 
 trigger:

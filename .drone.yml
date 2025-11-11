@@ -4,95 +4,16 @@ type: docker
 name: maven-build-only
 
 steps:
-  - name: "maven-build"
-    image: "maven:3.9-eclipse-temurin-17"
+  - name: maven-build
+    image: maven:3.9-eclipse-temurin-17
     commands:
-      - "echo '🚀 Starting Maven Build...'"
-      - "mvn -B -ntp clean install -DskipTests"
-      - "echo '✅ Maven build completed successfully.'"
+      - echo "🚀 Starting Maven Build..."
+      - mvn -B -ntp clean install -DskipTests
+      - echo "✅ Maven build completed successfully."
 
 trigger:
   branch:
-    - "main"
+    - main
   event:
-    - "push"
-
-# ---
-# kind: pipeline
-# type: docker
-# name: build-test-release
-
-# environment:
-#   SERVICE_NAME: "lt-be-apnt-service"
-#   TAG_PREFIX: "v2qa"
-#   MAVEN_IMAGE: "maven:3.9-eclipse-temurin-17"
-#   DOCKER_HUB_REPO: "maheshgowdamg25/lt-be-apnt-service"
-#   STACK_REPO_URL: "https://github.com/maheshgowda-dwise/Argocd.git"
-#   STACK_BRANCH: "main"
-#   STACK_FILE: "LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml"
-#   VALUES_SERVICE_NAME: "appointment"
-#   STACK_LOCAL_DIR_NAME: "Argocd-Stack"
-
-# steps:
-#   - name: "maven-build"
-#     image: "maven:3.9-eclipse-temurin-17"
-#     commands:
-#       - "mvn -B -ntp clean install -DskipTests"
-
-#   - name: "docker-build-push"
-#     image: "plugins/docker"
-#     depends_on:
-#       - "maven-build"
-#     settings:
-#       repo: "${DOCKER_HUB_REPO}" # Use environment variable
-#       username:
-#         from_secret: "docker_username"
-#       password:
-#         from_secret: "docker_password"
-#       dockerfile: "Dockerfile"
-#       context: "."
-#       tags:
-#         - "latest"
-#         - "${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA}"
-#     when:
-#       branch:
-#         - "main"
-#       event:
-#         - "push"
-
-#   - name: "update-stack-repo"
-#     image: "alpine/git"
-#     depends_on:
-#       - "docker-build-push"
-#     environment:
-#       GIT_USER:
-#         from_secret: "STACK_REPO_USER"
-#       GIT_TOKEN:
-#         from_secret: "STACK_REPO_TOKEN"
-#     commands:
-#       - "apk add --no-cache bash git sed coreutils"
-#       - "echo '🔁 Cloning stack repo...'"
-#       # Clone using token in URL (STACK_REPO_URL#https:// removes the 'https://' prefix)
-#       - "git clone --branch ${STACK_BRANCH} https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://} stack-repo"
-#       - "cd stack-repo"
-#       - "SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)"
-#       - "IMAGE_TAG=${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${SHORT_COMMIT}"
-#       - "NEW_IMAGE=${DOCKER_HUB_REPO}:${IMAGE_TAG}"
-#       - "STACK_FILE_PATH=${STACK_FILE}" # STACK_FILE is relative to the stack-repo root
-#       - "echo '🖋️ Updating ${STACK_FILE_PATH} with ${NEW_IMAGE}'"
-#       # Check if the commit is already present to avoid redundant commits
-#       - "if grep -q ${SHORT_COMMIT} ${STACK_FILE_PATH}; then echo '✅ Up to date'; exit 0; fi"
-#       # Use the env var STACK_FILE for the sed path inside stack-repo
-#       - "sed -i \"s|image:.*|image: ${NEW_IMAGE}|g\" ${STACK_FILE_PATH}"
-#       - "git config user.email 'ci@drone.local'"
-#       - "git config user.name 'Drone CI'"
-#       - "git add ${STACK_FILE}"
-#       - "git commit -m \"chore(${SERVICE_NAME}): update image to ${NEW_IMAGE}\" || echo '⚠️ No changes'"
-#       - "git push origin ${STACK_BRANCH}"
-#       - "echo '🚀 Stack repo updated successfully.'"
-
-# trigger:
-#   branch:
-#     - "main"
-#   event:
-#     - "push"
+    - push
+    - custom

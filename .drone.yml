@@ -57,8 +57,8 @@ steps:
       - FILE_PATH="${STACK_FILE}"
       - echo "🖋️ Updating ${FILE_PATH} with ${NEW_IMAGE}"
       - sed -i "s|image:.*|image: ${NEW_IMAGE}|g" "${FILE_PATH}"
-      - git config user.email "ci@drone.local"
-      - git config user.name "Drone CI/CD"
+      - git config user.email "mahesh.g@lifetrenz.com"
+      - git config user.name "maheshgowda-dwise"
       - git add "${FILE_PATH}"
       - git commit -m "chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}" || echo "⚠️ No changes"
       - git push origin ${STACK_BRANCH}

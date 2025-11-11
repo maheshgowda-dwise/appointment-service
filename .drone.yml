@@ -1,7 +1,7 @@
 ---
 kind: pipeline
 type: docker
-name: build-test-release
+name: build-and-push
 
 steps:
   - name: maven-build
@@ -11,12 +11,22 @@ steps:
       - mvn -B -ntp clean install -DskipTests
       - echo "✅ Maven build completed successfully."
 
+  - name: prepare-tag
+    image: alpine:latest
+    depends_on:
+      - maven-build
+    commands:
+      - apk add --no-cache bash coreutils
+      - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
+      - TIMESTAMP=$(date +%Y%m%d%H%M)
+      - IMAGE_TAG="v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
+      - echo "✅ Generated image tag: ${IMAGE_TAG}"
+      - echo "${IMAGE_TAG}" > /tmp/image_tag
+
   - name: docker-build-push
     image: plugins/docker
     depends_on:
-      - maven-build
-    environment:
-      TAG_PREFIX: "v2qa"
+      - prepare-tag
     settings:
       repo: maheshgowdamg25/lt-be-apnt-service
       username:
@@ -27,10 +37,15 @@ steps:
       context: .
       tags:
         - latest
-        # Tag format: v2qa-<timestamp>-<short_commit>
-        - "v2qa-$(date +%Y%m%d%H%M)-${DRONE_COMMIT_SHA:0:7}"
-
-  
+    commands:
+      - echo "🔖 Reading generated tag..."
+      - export IMAGE_TAG=$(cat /tmp/image_tag)
+      - echo "🧱 Building Docker image with tag: ${IMAGE_TAG}"
+      - docker build -t maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} .
+      - docker push maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}
+      - docker tag maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG} maheshgowdamg25/lt-be-apnt-service:latest
+      - docker push maheshgowdamg25/lt-be-apnt-service:latest
+      - echo "✅ Docker image pushed successfully as ${IMAGE_TAG}"
 
 trigger:
   branch:

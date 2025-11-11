@@ -7,22 +7,15 @@ environment:
   SERVICE_NAME: lt-be-apnt-service
   TAG_PREFIX: v2qa
   MAVEN_IMAGE: maven:3.9-eclipse-temurin-17
-  
   DOCKER_HUB_REPO: maheshgowdamg25/lt-be-apnt-service
-  
+
   STACK_REPO_URL: https://github.com/maheshgowda-dwise/Argocd.git
-  STACK_BRANCH: main 
+  STACK_BRANCH: main
   STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
   VALUES_SERVICE_NAME: appointment
   STACK_LOCAL_DIR_NAME: Argocd-Stack
 
-  STACK_REPO_USER_VAR:
-    from_secret: STACK_REPO_USER
-  STACK_REPO_TOKEN_VAR:
-    from_secret: STACK_REPO_TOKEN
-
 steps:
-
   - name: maven-build
     image: ${MAVEN_IMAGE}
     volumes:
@@ -35,68 +28,77 @@ steps:
     image: plugins/docker
     settings:
       repo: ${DOCKER_HUB_REPO}
-      tags:
-        - ${TAG_PREFIX}-${DRONE_DATE}-latest
-        - ${TAG_PREFIX}-${DRONE_DATE}-${DRONE_COMMIT_SHA}
       username:
         from_secret: DOCKER_USERNAME
       password:
         from_secret: DOCKER_PASSWORD
+      tags:
+        - ${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-latest
+        - ${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
     when:
-      branch: main
-      event: push
+      branch:
+        - main
+      event:
+        - push
 
   - name: clone-stack-repo
     image: alpine/git
+    environment:
+      GIT_URL: ${STACK_REPO_URL}
+      GIT_USER:
+        from_secret: STACK_REPO_USER
+      GIT_TOKEN:
+        from_secret: STACK_REPO_TOKEN
     volumes:
       - name: stack-repo
         path: /stack
-    environment:
-      GIT_URL: ${STACK_REPO_URL}
-      GIT_USER: ${STACK_REPO_USER_VAR}
-      GIT_TOKEN: ${STACK_REPO_TOKEN_VAR}
     commands:
       - |
+        set -e
         if [ -n "$GIT_USER" ] && [ -n "$GIT_TOKEN" ]; then
           REPO_URL_WITH_CREDS="${GIT_URL/https:\/\//https:\/\/${GIT_USER}:${GIT_TOKEN}@}"
         else
           REPO_URL_WITH_CREDS="$GIT_URL"
         fi
         git clone --branch ${STACK_BRANCH} "$REPO_URL_WITH_CREDS" /stack/${STACK_LOCAL_DIR_NAME}
+        echo "✅ Cloned stack repo successfully."
     when:
-      branch: main
-      event: push
+      branch:
+        - main
+      event:
+        - push
 
   - name: update-stack-repo
     image: alpine/git
+    environment:
+      GIT_USER:
+        from_secret: STACK_REPO_USER
+      GIT_TOKEN:
+        from_secret: STACK_REPO_TOKEN
     volumes:
       - name: stack-repo
         path: /stack
-    environment:
-      STACK_FILE_PATH: /stack/${STACK_LOCAL_DIR_NAME}/${STACK_FILE}
-      NEW_IMAGE: ${DOCKER_HUB_REPO}:${TAG_PREFIX}-${DRONE_DATE}-${DRONE_COMMIT_SHA}
-      SERVICE_NAME_SLUG: ${VALUES_SERVICE_NAME}
-      GIT_USER: ${STACK_REPO_USER_VAR}
-      GIT_TOKEN: ${STACK_REPO_TOKEN_VAR}
     commands:
       - apk add --no-cache bash sed
       - cd /stack/${STACK_LOCAL_DIR_NAME}
+      - export STACK_FILE_PATH="/stack/${STACK_LOCAL_DIR_NAME}/${STACK_FILE}"
+      - export NEW_IMAGE="${DOCKER_HUB_REPO}:${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}"
 
-      - echo "New Image Tag: ${NEW_IMAGE}"
+      - echo "🖋️ Updating ${STACK_FILE_PATH} with new image tag: ${NEW_IMAGE}"
 
       - |
-        if grep -q "${DRONE_COMMIT_SHA}" "${STACK_FILE_PATH}"; then
-          echo "Up to date: Commit already present. Skipping."
+        if grep -q "${DRONE_COMMIT_SHA:0:7}" "${STACK_FILE_PATH}"; then
+          echo "✅ Already up to date with this commit, skipping update."
           exit 0
         fi
 
-      - |
-        sed -i "s|image:.*|image: ${NEW_IMAGE}|g" "${STACK_FILE_PATH}"
+      - sed -i "s|image:.*|image: ${NEW_IMAGE}|g" "${STACK_FILE_PATH}"
 
-      - git config user.email "ci@drone.local"
-      - git config user.name "Drone CI/CD"
+      - git config --global user.email "ci@drone.local"
+      - git config --global user.name "Drone CI/CD"
       - git add "${STACK_FILE}"
-      - git commit -m "chore(${SERVICE_NAME}): update image to ${NEW_IMAGE}" || echo "No changes to commit"
+      - git commit -m "chore(${SERVICE_NAME}): update image to ${NEW_IMAGE}" || echo "⚠️ No changes to commit"
+
       - |
         if [ -n "$GIT_USER" ] && [ -n "$GIT_TOKEN" ]; then
           REPO_URL_WITH_CREDS="${STACK_REPO_URL/https:\/\//https:\/\/${GIT_USER}:${GIT_TOKEN}@}"
@@ -104,10 +106,12 @@ steps:
           REPO_URL_WITH_CREDS="${STACK_REPO_URL}"
         fi
         git push "${REPO_URL_WITH_CREDS}" ${STACK_BRANCH}
-        echo "Values updated and pushed."
+        echo "🚀 Stack repo updated and pushed successfully."
     when:
-      branch: main
-      event: push
+      branch:
+        - main
+      event:
+        - push
 
 volumes:
   - name: m2-cache

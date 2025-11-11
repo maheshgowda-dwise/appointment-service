@@ -4,51 +4,48 @@ type: docker
 name: build-and-push
 
 steps:
-  - name: maven-build
-    image: maven:3.9-eclipse-temurin-17
+  - name: "maven-build"
+    image: "maven:3.9-eclipse-temurin-17"
     commands:
-      - echo "🚀 Starting Maven Build..."
-      - mvn -B -ntp clean install -DskipTests
-      - echo "✅ Maven build completed successfully."
+      - "echo '🚀 Starting Maven Build...'"
+      - "mvn -B -ntp clean install -DskipTests"
+      - "echo '✅ Maven build completed successfully.'"
 
-  - name: prepare-tag
-    image: alpine:latest
+  - name: "prepare-tag"
+    image: "alpine:latest"
     depends_on:
-      - maven-build
+      - "maven-build"
     commands:
-      - apk add --no-cache bash coreutils
-      - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
-      - TIMESTAMP=$(date +%Y%m%d%H%M)
-      - IMAGE_TAG="v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
-      - echo "✅ Generated tag: ${IMAGE_TAG}"
-      - echo "${IMAGE_TAG}" > /tmp/image_tag
+      - "apk add --no-cache bash coreutils"
+      - "SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)"
+      - "TIMESTAMP=$(date +%Y%m%d%H%M)"
+      - "IMAGE_TAG=v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
+      - "echo ${IMAGE_TAG} > image_tag.txt"
+      - "echo '✅ Generated tag: ' $(cat image_tag.txt)"
 
-  - name: docker-build-push
-    image: docker:27.0.3
+  - name: "docker-build-push"
+    image: "docker:27.0.3"
     depends_on:
-      - prepare-tag
+      - "prepare-tag"
     environment:
       DOCKER_REPO: "maheshgowdamg25/lt-be-apnt-service"
       DOCKER_USERNAME:
-        from_secret: docker_username
+        from_secret: "docker_username"
       DOCKER_PASSWORD:
-        from_secret: docker_password
+        from_secret: "docker_password"
     commands:
-      - apk add --no-cache bash coreutils docker-cli
-      - IMAGE_TAG=$(cat /tmp/image_tag)
-      - echo "🔖 Using tag: ${IMAGE_TAG}"
-      - echo "🔐 Logging in to Docker Hub..."
-      - echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
-      - echo "🧱 Building Docker image..."
-      - docker build -t ${DOCKER_REPO}:${IMAGE_TAG} -t ${DOCKER_REPO}:latest .
-      - echo "🚀 Pushing image to Docker Hub..."
-      - docker push ${DOCKER_REPO}:${IMAGE_TAG}
-      - docker push ${DOCKER_REPO}:latest
-      - echo "✅ Docker image pushed successfully: ${DOCKER_REPO}:${IMAGE_TAG}"
+      - "apk add --no-cache bash coreutils docker-cli"
+      - "IMAGE_TAG=$(cat image_tag.txt)"
+      - "echo '🔖 Using tag:' ${IMAGE_TAG}"
+      - "echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin"
+      - "docker build -t ${DOCKER_REPO}:${IMAGE_TAG} -t ${DOCKER_REPO}:latest ."
+      - "docker push ${DOCKER_REPO}:${IMAGE_TAG}"
+      - "docker push ${DOCKER_REPO}:latest"
+      - "echo '✅ Docker image pushed successfully:' ${DOCKER_REPO}:${IMAGE_TAG}"
 
 trigger:
   branch:
-    - main
+    - "main"
   event:
-    - push
-    - custom
+    - "push"
+    - "custom"

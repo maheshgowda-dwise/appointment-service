@@ -15,24 +15,21 @@ environment:
   STACK_LOCAL_DIR_NAME: "Argocd-Stack"
 
 steps:
-  - name: maven-build
-    image: maven:3.9-eclipse-temurin-17
-    volumes:
-      - name: m2-cache
-        path: /root/.m2
+  - name: "maven-build"
+    image: "maven:3.9-eclipse-temurin-17"
     commands:
-      - mvn -B -ntp clean install -DskipTests
+      - "mvn -B -ntp clean install -DskipTests"
 
-  - name: docker-build-push
-    image: plugins/docker
+  - name: "docker-build-push"
+    image: "plugins/docker"
     depends_on:
-      - maven-build
+      - "maven-build"
     settings:
       repo: "maheshgowdamg25/lt-be-apnt-service"
       username:
-        from_secret: docker_username
+        from_secret: "docker_username"
       password:
-        from_secret: docker_password
+        from_secret: "docker_password"
       dockerfile: "Dockerfile"
       context: "."
       tags:
@@ -40,48 +37,40 @@ steps:
         - "${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA}"
     when:
       branch:
-        - main
+        - "main"
       event:
-        - push
+        - "push"
 
-  - name: update-stack-repo
-    image: alpine/git
+  - name: "update-stack-repo"
+    image: "alpine/git"
     depends_on:
-      - docker-build-push
+      - "docker-build-push"
     environment:
       GIT_USER:
-        from_secret: STACK_REPO_USER
+        from_secret: "STACK_REPO_USER"
       GIT_TOKEN:
-        from_secret: STACK_REPO_TOKEN
+        from_secret: "STACK_REPO_TOKEN"
     commands:
-      - apk add --no-cache bash sed coreutils
-      - echo "🔁 Cloning stack repo..."
-      - >
-        git clone --branch ${STACK_BRANCH}
-        https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://}
-        /stack
-      - cd /stack
-      - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
-      - IMAGE_TAG="${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${SHORT_COMMIT}"
-      - NEW_IMAGE="${DOCKER_HUB_REPO}:${IMAGE_TAG}"
-      - STACK_FILE_PATH="/stack/${STACK_FILE}"
-      - echo "🖋️ Updating ${STACK_FILE_PATH} with new image ${NEW_IMAGE}"
-      - if grep -q "${SHORT_COMMIT}" "${STACK_FILE_PATH}"; then echo "✅ Up to date"; exit 0; fi
-      - sed -i "s|image:.*|image: ${NEW_IMAGE}|g" "${STACK_FILE_PATH}"
-      - git config user.email "ci@drone.local"
-      - git config user.name "Drone CI/CD"
-      - git add "${STACK_FILE}"
-      - git commit -m "chore(${SERVICE_NAME}): update image to ${NEW_IMAGE}" || echo "⚠️ No changes"
-      - git push origin ${STACK_BRANCH}
-      - echo "🚀 Stack repo updated successfully."
-
-volumes:
-  - name: m2-cache
-    host:
-      path: /tmp/drone/m2_cache
+      - "apk add --no-cache bash git sed coreutils"
+      - "echo '🔁 Cloning stack repo...'"
+      - "git clone --branch ${STACK_BRANCH} https://${GIT_USER}:${GIT_TOKEN}@${STACK_REPO_URL#https://} stack-repo"
+      - "cd stack-repo"
+      - "SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)"
+      - "IMAGE_TAG=${TAG_PREFIX}-${DRONE_BUILD_NUMBER}-${SHORT_COMMIT}"
+      - "NEW_IMAGE=${DOCKER_HUB_REPO}:${IMAGE_TAG}"
+      - "STACK_FILE_PATH=stack-repo/${STACK_FILE}"
+      - "echo '🖋️ Updating ${STACK_FILE_PATH} with ${NEW_IMAGE}'"
+      - "if grep -q ${SHORT_COMMIT} ${STACK_FILE_PATH}; then echo '✅ Up to date'; exit 0; fi"
+      - "sed -i \"s|image:.*|image: ${NEW_IMAGE}|g\" ${STACK_FILE_PATH}"
+      - "git config user.email 'ci@drone.local'"
+      - "git config user.name 'Drone CI'"
+      - "git add ${STACK_FILE}"
+      - "git commit -m \"chore(${SERVICE_NAME}): update image to ${NEW_IMAGE}\" || echo '⚠️ No changes'"
+      - "git push origin ${STACK_BRANCH}"
+      - "echo '🚀 Stack repo updated successfully.'"
 
 trigger:
   branch:
-    - main
+    - "main"
   event:
-    - push
+    - "push"

@@ -8,15 +8,11 @@ environment:
   VALUES_SERVICE_NAME: appointment
   TAG_PREFIX: v2qa
   MAVEN_IMAGE: maven:3.9-eclipse-temurin-17
-
-  # Repositories
   SOURCE_REPO_URL: https://github.com/maheshgowda-dwise/appointment-service.git
   SOURCE_BRANCH: main
   STACK_REPO_URL: https://github.com/maheshgowda-dwise/Argocd.git
   STACK_BRANCH: main
   STACK_FILE_PATH: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
-
-  # Docker Hub Repo
   DOCKER_REPO: maheshgowdamg25/lt-be-apnt-service
 
 steps:
@@ -30,7 +26,7 @@ steps:
       - echo "$COMMIT_HASH" > /tmp/commit_hash
 
   - name: build-maven
-    image: ${MAVEN_IMAGE}
+    image: maven:3.9-eclipse-temurin-17
     depends_on: [clone-service]
     commands:
       - cd ${SERVICE_NAME}

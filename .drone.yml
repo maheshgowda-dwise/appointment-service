@@ -21,27 +21,23 @@ steps:
       - "TIMESTAMP=$(date +%Y%m%d%H%M)"
       - "IMAGE_TAG=v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
       - "echo ${IMAGE_TAG} > image_tag.txt"
-      - "echo '✅ Generated tag: ' $(cat image_tag.txt)"
+      - "echo '✅ Generated tag:' $(cat image_tag.txt)"
 
   - name: "docker-build-push"
-    image: "docker:27.0.3"
+    image: "plugins/docker"
     depends_on:
       - "prepare-tag"
-    environment:
-      DOCKER_REPO: "maheshgowdamg25/lt-be-apnt-service"
-      DOCKER_USERNAME:
-        from_secret: "docker_username"
-      DOCKER_PASSWORD:
-        from_secret: "docker_password"
-    commands:
-      - "apk add --no-cache bash coreutils docker-cli"
-      - "IMAGE_TAG=$(cat image_tag.txt)"
-      - "echo '🔖 Using tag:' ${IMAGE_TAG}"
-      - "echo ${DOCKER_PASSWORD} | docker login -u ${DOCKER_USERNAME} --password-stdin"
-      - "docker build -t ${DOCKER_REPO}:${IMAGE_TAG} -t ${DOCKER_REPO}:latest ."
-      - "docker push ${DOCKER_REPO}:${IMAGE_TAG}"
-      - "docker push ${DOCKER_REPO}:latest"
-      - "echo '✅ Docker image pushed successfully:' ${DOCKER_REPO}:${IMAGE_TAG}"
+    settings:
+      repo: "maheshgowdamg25/lt-be-apnt-service"
+      username:
+        from_secret: docker_username
+      password:
+        from_secret: docker_password
+      dockerfile: "Dockerfile"
+      context: "."
+      tags:
+        - "latest"
+        - "v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}"
 
 trigger:
   branch:

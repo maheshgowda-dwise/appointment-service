@@ -29,15 +29,15 @@ steps:
       GIT_TOKEN:
         from_secret: git_token
     commands:
-      - echo "=== Cloning stack repo ==="
-      - git config --global user.email "drone@ci.local"
-      - git config --global user.name "$GIT_USER"
-      - git clone https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git
-      - cd Argocd/LT-QA/BE-Projects/BE-Canary-Helm-Unified
-      - echo "=== Updating image tag in values.yaml ==="
-      - IMAGE_TAG="maheshgowdamg25/lt-be-apnt-service:v2qa-${DRONE_BUILD_CREATED}-${DRONE_COMMIT_SHA:0:7}"
-      # ✅ safer form using echo + sed (no YAML parse issue)
-      - sh -c "sed -i 's|image:.*|image: '${IMAGE_TAG}'|g' values.yaml"
-      - git add values.yaml
-      - git commit -m \"Drone CI: Update image to ${IMAGE_TAG}\"
-      - git push https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git main
+      - |
+        echo "=== Cloning stack repo ==="
+        git config --global user.email "drone@ci.local"
+        git config --global user.name "$GIT_USER"
+        git clone https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git
+        cd Argocd/LT-QA/BE-Projects/BE-Canary-Helm-Unified
+        echo "=== Updating image tag in values.yaml ==="
+        IMAGE_TAG="maheshgowdamg25/lt-be-apnt-service:v2qa-${DRONE_BUILD_CREATED}-${DRONE_COMMIT_SHA:0:7}"
+        sed -i "s|image:.*|image: ${IMAGE_TAG}|g" values.yaml
+        git add values.yaml
+        git commit -m "Drone CI: Update image to ${IMAGE_TAG}"
+        git push https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git main

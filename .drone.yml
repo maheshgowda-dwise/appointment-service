@@ -20,7 +20,7 @@ steps:
       - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
       - TIMESTAMP=$(date +%Y%m%d%H%M)
       - IMAGE_TAG="v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
-      - "echo ${IMAGE_TAG} > image_tag.txt"
+      - sh -c "echo ${IMAGE_TAG} > image_tag.txt"
       - echo "✅ Generated tag: ${IMAGE_TAG}"
 
   - name: docker-build-push

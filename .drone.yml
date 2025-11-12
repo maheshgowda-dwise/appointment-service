@@ -1,68 +1,42 @@
----
 kind: pipeline
 type: docker
-name: build-push-update-stack
+name: appointment-service-build-deploy
 
 steps:
-  - name: maven-build
-    image: maven:3.9-eclipse-temurin-17
+  - name: clone and build
+    image: maven:3.9.6-eclipse-temurin-17
     commands:
-      - echo "🚀 Starting Maven Build..."
-      - mvn -B -ntp clean install -DskipTests
-      - echo "✅ Maven build completed successfully."
+      - echo "=== Cloning and building Maven project ==="
+      - mvn clean package -DskipTests
 
-  - name: docker-build-push
+  - name: build and push docker image
     image: plugins/docker
-    depends_on:
-      - maven-build
     settings:
       repo: maheshgowdamg25/lt-be-apnt-service
+      tags:
+        - v2qa-${DRONE_BUILD_CREATED}-${DRONE_COMMIT_SHA:0:7}
+      dockerfile: Dockerfile
       username:
         from_secret: docker_username
       password:
         from_secret: docker_password
-      dockerfile: Dockerfile
-      context: .
-      tags:
-        - latest
-        - "v2qa-${DRONE_COMMIT_SHA:0:7}"
 
-  - name: update-argocd-repo
+  - name: update stack repo
     image: alpine/git
-    depends_on:
-      - docker-build-push
+    environment:
+      GIT_USER:
+        from_secret: git_user
+      GIT_TOKEN:
+        from_secret: git_token
     commands:
-      - |
-        set -e
-        echo "🔁 Cloning ArgoCD repo..."
-        git clone --branch main https://github.com/maheshgowda-dwise/Argocd.git stack-repo
-        cd stack-repo/LT-QA/BE-Projects/BE-Canary-Helm-Unified
-
-        echo "🧩 Setting up variables..."
-        IMAGE_TAG="v2qa-${DRONE_COMMIT_SHA:0:7}"
-        NEW_IMAGE="maheshgowdamg25/lt-be-apnt-service:${IMAGE_TAG}"
-        STACK_FILE="values.yaml"
-
-        echo "🖋️ Checking ${STACK_FILE} for existing image..."
-        if grep -q "${IMAGE_TAG}" "${STACK_FILE}"; then
-          echo "✅ Already updated (${IMAGE_TAG}), skipping commit."
-          exit 0
-        fi
-
-        echo "🖋️ Updating ${STACK_FILE} with ${NEW_IMAGE}"
-        sed -i "s|^\(\s*image:\s*\).*|\1${NEW_IMAGE}|g" "${STACK_FILE}"
-
-        echo "🧾 Git committing and pushing changes..."
-        git config user.email "mahesh.g@lifetrenz.com"
-        git config user.name "maheshgowda-dwise"
-        git add "${STACK_FILE}"
-        git commit -m "chore(appointment): update image to ${IMAGE_TAG}" || echo "⚠️ No changes to commit"
-        git push https://github.com/maheshgowda-dwise/Argocd.git main
-        echo "🚀 Stack repo updated successfully with ${NEW_IMAGE}"
-
-trigger:
-  branch:
-    - main
-  event:
-    - push
-    - custom
+      - echo "=== Cloning stack repo ==="
+      - git config --global user.email "drone@ci.local"
+      - git config --global user.name "$GIT_USER"
+      - git clone https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git
+      - cd Argocd/LT-QA/BE-Projects/BE-Canary-Helm-Unified
+      - echo "=== Updating image tag in values.yaml ==="
+      - IMAGE_TAG="maheshgowdamg25/lt-be-apnt-service:v2qa-${DRONE_BUILD_CREATED}-${DRONE_COMMIT_SHA:0:7}"
+      - sed -i "s|image:.*|image: ${IMAGE_TAG}|g" values.yaml
+      - git add values.yaml
+      - git commit -m "Drone CI: Update image to ${IMAGE_TAG}"
+      - git push origin main

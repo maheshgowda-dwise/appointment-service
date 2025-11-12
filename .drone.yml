@@ -39,31 +39,31 @@ steps:
       DOCKER_REPO: "maheshgowdamg25/lt-be-apnt-service"
     commands:
       - apk add --no-cache bash git sed coreutils
-      - bash -c '
-          set -e
-          IMAGE_TAG="v2qa-${DRONE_COMMIT_SHA:0:7}"
-          NEW_IMAGE="${DOCKER_REPO}:${IMAGE_TAG}"
+      - |
+        bash -euo pipefail <<'EOF'
+        IMAGE_TAG="v2qa-${DRONE_COMMIT_SHA:0:7}"
+        NEW_IMAGE="${DOCKER_REPO}:${IMAGE_TAG}"
 
-          echo "🔁 Cloning stack repo..."
-          git clone --branch "${STACK_BRANCH}" "${STACK_REPO_URL}" stack-repo
-          cd stack-repo
+        echo "🔁 Cloning stack repo..."
+        git clone --branch "${STACK_BRANCH}" "${STACK_REPO_URL}" stack-repo
+        cd stack-repo
 
-          echo "🖋️ Checking ${STACK_FILE} for existing image..."
-          if grep -q "${IMAGE_TAG}" "${STACK_FILE}"; then
-            echo "✅ Already updated (${IMAGE_TAG}), skipping commit."
-            exit 0
-          fi
+        echo "🖋️ Checking ${STACK_FILE} for existing image..."
+        if grep -q "${IMAGE_TAG}" "${STACK_FILE}"; then
+          echo "✅ Already updated (${IMAGE_TAG}), skipping commit."
+          exit 0
+        fi
 
-          echo "🖋️ Updating ${STACK_FILE} with ${NEW_IMAGE}"
-          sed -i "s|image:.*|image: ${NEW_IMAGE}|g" "${STACK_FILE}"
+        echo "🖋️ Updating ${STACK_FILE} with ${NEW_IMAGE}"
+        sed -i "s|image:.*|image: ${NEW_IMAGE}|g" "${STACK_FILE}"
 
-          git config user.email "mahesh.g@lifetrenz.com"
-          git config user.name "maheshgowda-dwise"
-          git add "${STACK_FILE}"
-          git commit -m "chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}" || echo "⚠️ No changes to commit"
-          git push "${STACK_REPO_URL}" "${STACK_BRANCH}"
-          echo "🚀 Stack repo updated successfully with ${NEW_IMAGE}"
-        '
+        git config user.email "mahesh.g@lifetrenz.com"
+        git config user.name "maheshgowda-dwise"
+        git add "${STACK_FILE}"
+        git commit -m "chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}" || echo "⚠️ No changes to commit"
+        git push "${STACK_REPO_URL}" "${STACK_BRANCH}"
+        echo "🚀 Stack repo updated successfully with ${NEW_IMAGE}"
+        EOF
 
 trigger:
   branch:

@@ -38,16 +38,20 @@ steps:
         echo '🔁 Cloning ArgoCD repo...';
         git clone --branch main https://github.com/maheshgowda-dwise/Argocd.git stack-repo;
         cd stack-repo/LT-QA/BE-Projects/BE-Canary-Helm-Unified;
+
         IMAGE_TAG='v2qa-${DRONE_COMMIT_SHA:0:7}';
         NEW_IMAGE='maheshgowdamg25/lt-be-apnt-service:'\"${IMAGE_TAG}\";
         STACK_FILE='values.yaml';
+
         echo '🖋️ Checking ${STACK_FILE} for existing image...';
         if grep -q \"${IMAGE_TAG}\" \"${STACK_FILE}\"; then
           echo '✅ Already updated (${IMAGE_TAG}), skipping commit.';
           exit 0;
         fi;
-        echo '🖋️ Updating ${STACK_FILE} with ${NEW_IMAGE}';
+
+        echo '🖋️ Updating service.image field in ${STACK_FILE}';
         sed -i \"s|image:.*|image: ${NEW_IMAGE}|g\" \"${STACK_FILE}\";
+
         git config user.email 'mahesh.g@lifetrenz.com';
         git config user.name 'maheshgowda-dwise';
         git add \"${STACK_FILE}\";

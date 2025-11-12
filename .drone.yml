@@ -11,22 +11,10 @@ steps:
       - mvn -B -ntp clean install -DskipTests
       - echo "✅ Maven build completed successfully."
 
-  - name: prepare-tag
-    image: alpine:latest
-    depends_on:
-      - maven-build
-    commands:
-      - apk add --no-cache bash coreutils
-      - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
-      - TIMESTAMP=$(date +%Y%m%d%H%M)
-      - IMAGE_TAG="v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
-      - sh -c "echo ${IMAGE_TAG} > image_tag.txt"
-      - echo "✅ Generated tag: ${IMAGE_TAG}"
-
   - name: docker-build-push
     image: plugins/docker
     depends_on:
-      - prepare-tag
+      - maven-build
     settings:
       repo: maheshgowdamg25/lt-be-apnt-service
       username:
@@ -35,9 +23,9 @@ steps:
         from_secret: docker_password
       dockerfile: Dockerfile
       context: .
-      tags: >
-        latest
-        v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
+      tags:
+        - latest
+        - v2qa-${DRONE_COMMIT_SHA:0:7}
 
   - name: update-stack-repo
     image: alpine/git
@@ -45,7 +33,7 @@ steps:
       - docker-build-push
     commands:
       - apk add --no-cache bash git sed coreutils
-      - IMAGE_TAG=$(cat image_tag.txt)
+      - IMAGE_TAG="v2qa-${DRONE_COMMIT_SHA:0:7}"
       - DOCKER_REPO="maheshgowdamg25/lt-be-apnt-service"
       - STACK_REPO_URL="https://github.com/maheshgowda-dwise/Argocd.git"
       - STACK_BRANCH="main"

@@ -35,9 +35,9 @@ steps:
         from_secret: docker_password
       dockerfile: Dockerfile
       context: .
-      tags:
-        - latest
-        - v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
+      tags: >
+        latest
+        v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
 
   - name: update-stack-repo
     image: alpine/git

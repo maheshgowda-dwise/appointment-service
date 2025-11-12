@@ -60,7 +60,7 @@ steps:
       - git config user.email "mahesh.g@lifetrenz.com"
       - git config user.name "maheshgowda-dwise"
       - git add ${STACK_FILE}
-      - git commit -m "chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}" || echo "⚠️ No changes to commit"
+      - "git commit -m 'chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}' || echo '⚠️ No changes to commit'"
       - "git push https://github.com/maheshgowda-dwise/Argocd.git ${STACK_BRANCH}"
       - echo "🚀 Stack repo updated successfully with ${IMAGE_TAG}"
 

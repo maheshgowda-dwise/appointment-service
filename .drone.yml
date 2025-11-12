@@ -31,16 +31,15 @@ steps:
     image: alpine/git
     depends_on:
       - docker-build-push
-    environment:
-      STACK_REPO_URL: https://github.com/maheshgowda-dwise/Argocd.git
-      STACK_BRANCH: main
-      STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
-      VALUES_SERVICE_NAME: appointment
-      DOCKER_REPO: maheshgowdamg25/lt-be-apnt-service
     commands:
       - apk add --no-cache bash git sed coreutils
       - |
-        bash -euo pipefail <<EOF
+        export STACK_REPO_URL="https://github.com/maheshgowda-dwise/Argocd.git"
+        export STACK_BRANCH="main"
+        export STACK_FILE="LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml"
+        export VALUES_SERVICE_NAME="appointment"
+        export DOCKER_REPO="maheshgowdamg25/lt-be-apnt-service"
+
         IMAGE_TAG="v2qa-${DRONE_COMMIT_SHA:0:7}"
         NEW_IMAGE="${DOCKER_REPO}:${IMAGE_TAG}"
 
@@ -63,7 +62,6 @@ steps:
         git commit -m "chore(${VALUES_SERVICE_NAME}): update image to ${IMAGE_TAG}" || echo "⚠️ No changes to commit"
         git push "${STACK_REPO_URL}" "${STACK_BRANCH}"
         echo "🚀 Stack repo updated successfully with ${NEW_IMAGE}"
-        EOF
 
 trigger:
   branch:

@@ -3,13 +3,13 @@ type: docker
 name: appointment-service-build-deploy
 
 steps:
-  - name: clone and build
+  - name: clone-and-build
     image: maven:3.9.6-eclipse-temurin-17
     commands:
       - echo "=== Cloning and building Maven project ==="
       - mvn clean package -DskipTests
 
-  - name: build and push docker image
+  - name: build-and-push-docker-image
     image: plugins/docker
     settings:
       repo: maheshgowdamg25/lt-be-apnt-service
@@ -21,7 +21,7 @@ steps:
       password:
         from_secret: docker_password
 
-  - name: update stack repo
+  - name: update-stack-repo
     image: alpine/git
     environment:
       GIT_USER:
@@ -39,4 +39,4 @@ steps:
       - sed -i "s|image:.*|image: ${IMAGE_TAG}|g" values.yaml
       - git add values.yaml
       - git commit -m "Drone CI: Update image to ${IMAGE_TAG}"
-      - git push origin main
+      - git push https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git main

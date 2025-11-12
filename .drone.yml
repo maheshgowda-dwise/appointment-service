@@ -36,7 +36,8 @@ steps:
       - cd Argocd/LT-QA/BE-Projects/BE-Canary-Helm-Unified
       - echo "=== Updating image tag in values.yaml ==="
       - IMAGE_TAG="maheshgowdamg25/lt-be-apnt-service:v2qa-${DRONE_BUILD_CREATED}-${DRONE_COMMIT_SHA:0:7}"
-      - sed -i "s|image:.*|image: ${IMAGE_TAG}|g" values.yaml
+      # ✅ FIX: use single quotes to avoid YAML parsing issues
+      - sed -i 's|image:.*|image: '"${IMAGE_TAG}"'|g' values.yaml
       - git add values.yaml
       - git commit -m "Drone CI: Update image to ${IMAGE_TAG}"
       - git push https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git main

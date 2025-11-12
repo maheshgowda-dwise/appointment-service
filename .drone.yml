@@ -6,9 +6,10 @@ steps:
   - name: clone-and-build
     image: maven:3.9.6-eclipse-temurin-17
     commands:
-      - echo "=== Cloning and building Maven project ==="
-      - mvn clean package -DskipTests
-
+      - echo "🚀 Starting Maven Build..."
+      - mvn -B -ntp clean install -DskipTests
+      - echo "✅ Maven build completed successfully."
+      
   - name: build-and-push-docker-image
     image: plugins/docker
     settings:
@@ -33,11 +34,20 @@ steps:
         echo "=== Cloning stack repo ==="
         git config --global user.email "drone@ci.local"
         git config --global user.name "$GIT_USER"
+
         git clone https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git
         cd Argocd/LT-QA/BE-Projects/BE-Canary-Helm-Unified
+
         echo "=== Updating image tag in values.yaml ==="
         IMAGE_TAG="maheshgowdamg25/lt-be-apnt-service:v2qa-${DRONE_BUILD_CREATED}-${DRONE_COMMIT_SHA:0:7}"
-        sed -i "s|image:.*|image: ${IMAGE_TAG}|g" values.yaml
+        echo "Using IMAGE_TAG=${IMAGE_TAG}"
+
+        # ✅ Correctly match indented image lines and replace them
+        sed -i "s|^\(\s*image:\).*|\1 ${IMAGE_TAG}|g" values.yaml
+
+        echo "=== Previewing updated values.yaml ==="
+        grep "image:" values.yaml
+
         git add values.yaml
         git commit -m "Drone CI: Update image to ${IMAGE_TAG}"
         git push https://$GIT_USER:$GIT_TOKEN@github.com/maheshgowda-dwise/Argocd.git main

@@ -32,15 +32,15 @@ steps:
     depends_on:
       - docker-build-push
     environment:
-      STACK_REPO_URL: "https://github.com/maheshgowda-dwise/Argocd.git"
-      STACK_BRANCH: "main"
-      STACK_FILE: "LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml"
-      VALUES_SERVICE_NAME: "appointment"
-      DOCKER_REPO: "maheshgowdamg25/lt-be-apnt-service"
+      STACK_REPO_URL: https://github.com/maheshgowda-dwise/Argocd.git
+      STACK_BRANCH: main
+      STACK_FILE: LT-QA/BE-Projects/BE-Canary-Helm-Unified/values.yaml
+      VALUES_SERVICE_NAME: appointment
+      DOCKER_REPO: maheshgowdamg25/lt-be-apnt-service
     commands:
       - apk add --no-cache bash git sed coreutils
       - |
-        bash -euo pipefail <<'EOF'
+        bash -euo pipefail <<EOF
         IMAGE_TAG="v2qa-${DRONE_COMMIT_SHA:0:7}"
         NEW_IMAGE="${DOCKER_REPO}:${IMAGE_TAG}"
 

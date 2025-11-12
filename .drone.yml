@@ -20,7 +20,7 @@ steps:
       - SHORT_COMMIT=$(echo ${DRONE_COMMIT_SHA} | cut -c1-7)
       - TIMESTAMP=$(date +%Y%m%d%H%M)
       - IMAGE_TAG="v2qa-${TIMESTAMP}-${SHORT_COMMIT}"
-      
+      - "echo ${IMAGE_TAG} > image_tag.txt"
       - echo "✅ Generated tag: ${IMAGE_TAG}"
 
   - name: docker-build-push
@@ -35,7 +35,9 @@ steps:
         from_secret: docker_password
       dockerfile: Dockerfile
       context: .
-      tags: latest, v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
+      tags:
+        - latest
+        - v2qa-${DRONE_BUILD_NUMBER}-${DRONE_COMMIT_SHA:0:7}
 
   - name: update-stack-repo
     image: alpine/git
@@ -54,7 +56,7 @@ steps:
       - "git clone --branch ${STACK_BRANCH} ${STACK_REPO_URL} stack-repo"
       - cd stack-repo
       - echo "🖋️ Checking ${STACK_FILE} for existing image..."
-      - if grep -q ${IMAGE_TAG} ${STACK_FILE}; then echo "✅ Already updated (${IMAGE_TAG}), skipping commit."; exit 0; fi
+      - "if grep -q ${IMAGE_TAG} ${STACK_FILE}; then echo '✅ Already updated (${IMAGE_TAG}), skipping commit.'; exit 0; fi"
       - echo "🖋️ Updating ${STACK_FILE} with ${NEW_IMAGE}"
       - "sed -i 's|image:.*|image: ${NEW_IMAGE}|g' ${STACK_FILE}"
       - git config user.email "mahesh.g@lifetrenz.com"
